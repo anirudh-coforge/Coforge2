@@ -9,3 +9,13 @@ git config --global user.email "madhurijha.bpsmv@gmail.com"
 git config --global user.name "madhuri75jha"
 git commit -m "Added a file newfile.txt"
 git push origin main
+
+
+# "Create a new repository on the command line”
+echo "# Coforge2" >> README.md
+git init
+git add README.md
+git commit -m "first commit"
+git branch -M main
+git remote add origin https://github.com/madhuri75jha/Coforge2.git
+git push -u origin main
