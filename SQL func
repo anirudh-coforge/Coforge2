@@ -1,0 +1,62 @@
+-- Inline Table-Valued Function
+CREATE FUNCTION fn_GetEmployeesByDept(@DeptID INT)
+RETURNS TABLE
+AS
+RETURN (
+    SELECT EmpID, EmpName, Salary
+    FROM Employees
+    WHERE DeptID = @DeptID
+);
+GO
+
+CREATE FUNCTION fn_CalculateBonus(@Salary DECIMAL(10,2))
+RETURNS DECIMAL(10,2)
+AS
+BEGIN
+    DECLARE @Bonus DECIMAL(10,2);
+
+    IF @Salary <= 50000
+        SET @Bonus = @Salary * 0.10;
+    ELSE IF @Salary <= 70000
+        SET @Bonus = @Salary * 0.15;
+    ELSE
+        SET @Bonus = @Salary * 0.20;
+
+    RETURN @Bonus;
+END;
+GO
+
+-- Usage:
+SELECT * FROM fn_GetEmployeesByDept(101);
+
+Stored Procedure:
+CREATE PROCEDURE sp_GetEmployeesByDept
+    @DeptID INT
+AS
+BEGIN
+    SELECT EmpID, EmpName, Salary
+    FROM Employees
+    WHERE DeptID = @DeptID;
+END;
+GO
+To execute:
+EXEC sp_GetEmployeesByDept @DeptID = 4;
+
+
+-- Inline query to get employees with salary > average
+SELECT EmpName, Salary
+FROM Employees
+WHERE Salary > (SELECT AVG(Salary) FROM Employees);
+
+SELECT ABS(-100) AS AbsoluteValue;                   -- 100
+SELECT CEILING(12.3) AS CeilingValue;                -- 13
+SELECT FLOOR(12.9) AS FloorValue;                      -- 12
+SELECT ROUND(123.456, 2) AS RoundedValue;  -- 123.46
+
+
+SELECT GETDATE() AS CurrentDateTime;
+SELECT YEAR(GETDATE()) AS CurrentYear;
+SELECT MONTH(GETDATE()) AS CurrentMonth;
+SELECT DAY(GETDATE()) AS CurrentDay;
+SELECT DATEDIFF(YEAR, '2000-01-01', GETDATE()) AS YearsPassed;
+SELECT DATEADD(DAY, 7, GETDATE()) AS NextWeek;
