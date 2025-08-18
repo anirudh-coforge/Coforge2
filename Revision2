@@ -285,7 +285,7 @@ SQL Server physically stores the view result. This boosts performance for heavy 
 CREATE VIEW EmpSalaryView
 WITH SCHEMABINDING
 AS
-SELECT DeptID, COUNT(*) AS NumEmployees, SUM(Salary) AS TotalSalary
+SELECT DeptID, COUNT_BIG(*) AS NumEmployees, SUM(Salary) AS TotalSalary
 FROM dbo.Employees
 GROUP BY DeptID;
 
