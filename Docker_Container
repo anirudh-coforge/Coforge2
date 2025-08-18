@@ -1,0 +1,182 @@
+Why Docker & Containerization?
+1.	The Problem Before Docker
+Traditionally, applications were deployed on physical servers or virtual machines (VMs). This often caused issues like:
+o	“Works on my machine” problem → app works locally but fails in production due to missing dependencies or different OS versions.
+o	Heavy & Slow → VMs need a full operating system, which makes them large and resource-hungry.
+o	Difficult Scaling → deploying updates or scaling apps required manual setup and downtime.
+
+2.	What Containerization Solves
+o	Lightweight: Containers share the host OS kernel, unlike VMs, so they start in seconds and use fewer resources.
+o	Portability: You package the app with everything it needs (dependencies, config, libraries). If it works in the container locally, it will work the same in staging and production.
+o	Isolation: Each container runs independently. If one crashes, others are unaffected.
+o	Scalability: Containers can be easily replicated, load-balanced, and managed with tools like Kubernetes.
+
+3.	Why Docker Specifically?
+Docker is the most widely adopted containerization platform. It provides:
+o	Simple commands for building, running, and managing containers.
+o	Docker Hub → a huge library of prebuilt images (Nginx, MySQL, Python, etc.).
+o	Consistency across environments → from developer laptop to production cloud servers.
+o	Integration with CI/CD pipelines → making DevOps automation easier.
+
+4.	Real-World Example
+Imagine deploying a Python web app:
+o	Without Docker → You need to install Python, libraries, configure Nginx, handle OS differences manually.
+o	With Docker → You write a Dockerfile, bundle everything in one image, and just run docker run. Works the same everywhere.
+
+Docker & containerization exist to make applications portable, lightweight, consistent, and easy to deploy/scale.
+Docker Architecture with Example
+Docker Architecture (Simple Explanation)
+Think of Docker like a kitchen in a restaurant:
+•	Chef (Docker Engine/Daemon):
+The chef does the actual cooking. Similarly, Docker Engine is the background service that builds, runs, and manages containers.
+•	Recipes (Images):
+A recipe tells the chef how to cook a dish. In Docker, an image is a blueprint that describes how a container should run (OS, app code, dependencies).
+•	Dishes (Containers):
+The final dish served to the customer is like a container. It is a running instance of the image.
+•	Restaurant Menu (Docker Hub/Registry):
+Just like you can pick recipes from a menu, Docker Hub provides ready-made images that you can download and use.
+•	Waiter (Docker CLI / API):
+The waiter takes your order and passes it to the chef. Similarly, the Docker CLI or API takes your commands and sends them to the Docker Engine.
+
+Workflow 
+1. Docker Client (CLI/GUI)
+•	You, the user, interact with Docker using commands like:
+•	docker run nginx
+•	The client doesn’t do the heavy lifting. Instead, it just sends instructions to the Docker Daemon.
+
+2. Docker Daemon (Engine)
+•	The Daemon is the brain of Docker, always running in the background.
+•	It receives the request from the client, then:
+o	Pulls the required image (if not already available locally).
+o	Creates and manages the container.
+
+3. Docker Images
+•	An image is like a template or blueprint.
+•	It contains:
+o	App code
+o	Runtime environment (Python, Java, Node.js, etc.)
+o	System libraries & tools needed.
+•	Example: nginx:latest is an image stored on Docker Hub.
+
+4. Docker Containers
+•	A container is a running instance of an image.
+•	Lightweight, isolated, and portable.
+•	Think of it as a mini-computer running just what’s needed for your app.
+•	Example: Running Nginx in its own container without affecting your host OS.
+
+5. Docker Registry (Docker Hub, Private Registry)
+•	A registry is a central place where Docker images are stored and shared.
+•	When you run docker pull nginx, the image is fetched from Docker Hub.
+•	You can also push your own images to share with others.
+Docker Life cycle
+Image → Create → Run → (Pause/Unpause → Stop/Kill/Restart) → Remove.
+
+INSTALL DOCKER DESKTOP
+In Chrome Search for Install Docker Desktop for Windows
+https://docs.docker.com/desktop/setup/install/windows-install/
+ 
+mkdir C:\Users\student\nginx-docker
+cd C:\Users\student\nginx-docker
+
+# Dockerfile
+# Use official Nginx base image
+FROM nginx:latest
+# Copy custom index.html (if present)
+COPY index.html /usr/share/nginx/html/
+# Copy custom nginx.conf 
+COPY nginx.conf /etc/nginx/nginx.conf
+# Expose port 80
+EXPOSE 80
+# Start nginx
+CMD ["nginx", "-g", "daemon off;"]
+# nginx.conf
+events {}
+http {
+    server {
+        listen 80;
+        server_name localhost;
+        location / {
+            root /usr/share/nginx/html;
+            index index.html;
+        }
+    }
+}
+
+# index.html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Nginx Docker Site</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f9f9f9;
+      margin: 0;
+      padding: 0;
+      text-align: center;
+    }
+    header {
+      background: #2c3e50;
+      color: white;
+      padding: 20px 0;
+    }
+    section {
+      padding: 40px 20px;
+    }
+    h1 {
+      margin: 0;
+    }
+    p {
+      color: #555;
+      font-size: 1.2em;
+    }
+    a.button {
+      display: inline-block;
+      margin-top: 20px;
+      padding: 12px 25px;
+      background: #27ae60;
+      color: white;
+      text-decoration: none;
+      border-radius: 5px;
+      transition: background 0.3s;
+    }
+    a.button:hover {
+      background: #219150;
+    }
+    footer {
+      background: #eee;
+      padding: 15px 0;
+      margin-top: 30px;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Welcome to My Nginx Site</h1>
+  </header>
+  <section>
+    <p>This page is served from an <strong>Nginx container</strong> running inside Docker.</p>
+    <p>You can customize this page to build your own mini-site.</p>
+    <a href="#" class="button">Learn More</a>
+  </section>
+  <footer>
+    <p>Powered by Nginx & Docker</p>
+  </footer>
+</body>
+</html>
+
+Build and Run
+1.	Open PowerShell or CMD in your folder:
+cd C:\Users\student\nginx-docker
+2.	Build the image:
+docker build -t my-nginx .
+3.	Run the container:
+docker run -d -p 8080:80 my-nginx
+4.	Open browser → http://localhost:8080
+•	If index.html exists → you’ll see your custom page.
+•	If nginx.conf exists → it will override the default config.
+
+
