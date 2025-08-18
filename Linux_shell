@@ -1,3 +1,19 @@
+Shell
+The shell is a piece of software that acts as an interface between the user and the kernel. It takes commands entered by the user, interprets them, and passes them to the kernel. The kernel then executes those operations. In simple terms, the user types a command, and with the help of the kernel’s functions, the requested task gets performed.
+
+Types of Shell
+Different shells provide various features and user experiences for working with Unix/Linux systems, ranging from simple command execution to advanced scripting and customization.
+
+1.	Bourne Shell (sh)
+The Bourne Shell was one of the earliest Unix shells. It served as a straightforward way to communicate with the computer—allowing users to run commands, execute programs, and write basic scripts for automation. While it lacks advanced features, it’s dependable and still widely used in scripting.
+2.	C Shell (csh)
+The C Shell was designed with a syntax similar to the C programming language, making it familiar for developers. It introduced features like command history, which let users rerun previous commands easily. While convenient for quick tasks, it wasn’t the strongest option for complex scripting.
+3.	Korn Shell (ksh)
+The Korn Shell combined the strengths of both Bourne and C shells. It supported powerful scripting, maintained compatibility with older scripts, and was widely adopted in enterprises due to its flexibility. Initially, it wasn’t free, which limited its accessibility.
+4.	Bash (Bourne Again Shell)
+Bash is the most commonly used shell today. As an enhanced version of the Bourne Shell, it includes features like command history navigation with arrow keys, tab-based autocompletion, and robust scripting capabilities. It’s free, pre-installed on most Linux distributions, and also available on macOS.
+5.	Z Shell (zsh)
+Z Shell, or zsh, blends features from multiple shells while offering extensive customization. It resolves many limitations of older shells and introduces themes, plugins, and other developer-friendly enhancements. Due to its flexibility and polished user experience, zsh has become very popular and is now the default shell on macOS.
 What is Shell Scripting?
 •	A shell script is a text file that contains a series of commands written for the Unix/Linux shell (command-line interpreter like bash, sh, zsh).
 •	Instead of typing commands one by one in the terminal, you put them inside a script file and run it as a program.
@@ -23,9 +39,80 @@ Run it once → and it does everything automatically
 
 Shell scripting = Writing Linux commands in a file, giving it logic (like variables, loops, conditions), and automating tasks.
 
-Task Management in Linux
+cd ..     Go to its parent directory
+cd ~     Go to your home directory from any location
+mkdir <directory-name>
+mkdir newdir            creates a directory named newdir
+cd newdir   Change directory to newdir
+vi & vim – editors in linux
+nano – editor in linux
+vi test.sh     Opens file in vi editor
+Press i to insert text
+Press esc :wq
+ls -l      long list of files with creation date & permissions
+rwx – read, write & execute
+User, Group & Others
+vi test.sh
+#!/bin/bash
+echo “Hello Coforge”
+echo “Cron ran at $(date)”
+esc :wq
+#!/bin/bash is called a shebang. It’s used at the very top of a shell script to tell the system which interpreter to use to execute the script.
+1.	#! → special characters that indicate the file is a script and specify the interpreter.
+2.	/bin/bash → the full path to the Bash shell.
+Modes in vi
+1.	Normal mode – default mode when you open a file. You can navigate and run commands.
+2.	Insert mode – type text normally. Enter with:
+o	i → insert before cursor
+o	I → insert at beginning of line
+o	a → append after cursor
+o	A → append at end of line
+o	o → open a new line below
+o	O → open a new line above
+3.	Command-line mode – commands starting with : like :wq, :q!, :x
+
+Useful Normal Mode Commands
+•	h, j, k, l → move left, down, up, right
+•	0 → go to beginning of line
+•	$ → go to end of line
+•	dd → delete current line
+•	yy → copy (yank) current line
+•	p → paste after cursor
+•	u → undo
+•	Ctrl+r → redo
+•	>> → indent line
+•	<< → unindent line
+
+Command-line Mode (:)
+•	:w → save
+•	:q → quit
+•	:wq or :x → save and quit
+•	:q! → quit without saving
+•	:e filename → open another file
+•	:set number → show line numbers
+•	:set nonumber → hide line numbers
+
+Shift + Commands in Normal Mode
+•	Shift + A → append at end of line
+•	Shift + I → insert at start of line
+•	Shift + V → visual line mode
+•	Shift + G → go to last line
+•	gg → go to first line
+Basic Search
+1.	/pattern → search forward for pattern
+o	Example: /error searches forward for the word error
+2.	?pattern → search backward for pattern
+o	Example: ?error searches backward
+After Searching
+•	n → go to next match (same direction as search)
+•	N → go to previous match (opposite direction)
+
+Search Options
+•	/pattern\c → case-insensitive search (\c ignores case)
+•	/pattern\C → case-sensitive search (\C enforces case)
+----------------------------------------------------------------------------------------------------------------------
 Configuring Cron Jobs
-In Oracle Linux, cron is a time-based job scheduler used to automate repetitive tasks such as backups, system updates, monitoring scripts, and more.
+ cron is a time-based job scheduler used to automate repetitive tasks such as backups, system updates, monitoring scripts, and more.
 
 1. What is cron?
 The cron daemon (crond) runs in the background and executes scheduled tasks, known as cron jobs, based on time and date settings defined in a special file called the crontab.
@@ -36,6 +123,12 @@ Each line in the crontab follows this format:
 3. Viewing and Editing Crontab
 To view or edit the current user's cron jobs:
 crontab -e
+ 
+sudo service cron status
+sudo service cron start
+sudo service cron restart
+ 
+sudo service cron stop
 To view the crontab:
 crontab -l
 To remove the crontab:
@@ -55,9 +148,24 @@ Restart Apache every Sunday at midnight:
 Example from /etc/crontab:
 SHELL=/bin/bash
 PATH=/sbin:/bin:/usr/sbin:/usr/bin
-30 3 * * * root /usr/bin/yum update -y
+30 3 * * * root /usr/bin/apt update -y
 This runs a system update as root every day at 3:30 AM.
 
+What happens if you change the cron timing
+* * * * * root /usr/bin/apt update -y
+•	* * * * * → runs every minute
+•	The command /usr/bin/apt update -y will not run interactively in your terminal.
+•	Instead, cron runs it in the background, as the root user. You won’t see output on your terminal.
+•	Any output (like success messages or errors) will usually be emailed to the root user (or discarded if mail isn’t configured).
+Important notes
+1.	Running apt update -y every minute is risky:
+o	It will constantly hit the package servers.
+o	It may lock the package manager if another process is running.
+2.	To see it in your terminal, you can redirect output to a file:
+* * * * * root /usr/bin/apt update -y >> /tmp/apt-update.log 2>&1
+•	This saves all output (stdout + stderr) to /tmp/apt-update.log for you to check.
+3.	Interactive commands won’t work in cron:
+o	apt upgrade or apt install that ask for user input will fail unless you use -y
 
 
 What is cron?
@@ -663,6 +771,81 @@ backup_folder() {
     tar -czf $DEST/test_backup_$DATE.tar.gz $SRC
     echo "Backup done: $DEST/test_backup_$DATE.tar.gz"
 }
-
 backup_folder
+
+EXPLANATION
+
+•	Defines a function called backup_folder.
+•	All commands inside the braces {} are part of the function.
+
+# Variables
+SRC="/mnt/c/Users/user/test"
+DEST="/mnt/c/Users/user/backup"
+DATE=$(date +%Y-%m-%d)
+•	SRC → folder to back up (test)
+•	DEST → folder where the backup will be stored (backup)
+•	DATE → current date in YYYY-MM-DD format (used in the backup filename)
+
+#Create Backup Directory
+mkdir -p $DEST
+•	Creates the backup directory if it doesn’t exist.
+•	-p ensures no error if the directory already exists.
+
+#Create Compressed Backup
+tar -czf $DEST/test_backup_$DATE.tar.gz $SRC
+•	tar → creates an archive
+•	-c → create
+•	-z → compress with gzip
+•	-f → filename for the archive
+•	$DEST/test_backup_$DATE.tar.gz → output file, e.g., backup/test_backup_2025-08-18.tar.gz
+•	$SRC → folder being backed up (test)
+
+ #Confirmation Message
+echo "Backup done: $DEST/test_backup_$DATE.tar.gz"
+•	Prints a message showing where the backup is saved.
+
+#Call the Function
+backup_folder
+•	Actually executes the function and performs the backup.
+
+#View contents without extracting
+tar -tzf filename.tar.gz
+•	t → list contents
+•	z → gzip-compressed
+•	f → file name
+•	Example:
+tar -tzf test_backup_2025-08-18.tar.gz
+This will show all files and folders inside the archive.
+
+#Extract the archive
+tar -xzf filename.tar.gz
+•	x → extract
+•	z → gzip-compressed
+•	f → file name
+•	Example:
+tar -xzf test_backup_2025-08-18.tar.gz
+By default, it extracts into the current directory, preserving the folder structure.
+
+#Extract to a specific directory
+tar -xzf filename.tar.gz -C /path/to/destination
+•	-C → specify extraction directory
+•	Example:
+tar -xzf test_backup_2025-08-18.tar.gz -C /mnt/c/Users/user/restore
+This will extract the backup into the restore folder.
+
+
+# Example for printing variables
+#!/bin/bash
+echo "Current date and time: $(date)"
+# Define a variable
+NAME="Madhuri"     # This is a comment about the variable
+# Print the variable
+echo "Hello, $NAME"
+
+Output:
+Current date and time: Mon Aug 18 20:00:00 IST 2025
+Hello, Madhuri
+
+
+
 
