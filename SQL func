@@ -9,6 +9,9 @@ RETURN (
 );
 GO
 
+-- Usage:
+SELECT * FROM fn_GetEmployeesByDept(101);
+
 CREATE FUNCTION fn_CalculateBonus(@Salary DECIMAL(10,2))
 RETURNS DECIMAL(10,2)
 AS
@@ -26,8 +29,13 @@ BEGIN
 END;
 GO
 
--- Usage:
-SELECT * FROM fn_GetEmployeesByDept(101);
+--Usage
+SELECT 
+    EmpID,
+    EmpName,
+    Salary,
+    dbo.fn_CalculateBonus(Salary) AS Bonus
+FROM Employees;
 
 Stored Procedure:
 CREATE PROCEDURE sp_GetEmployeesByDept
