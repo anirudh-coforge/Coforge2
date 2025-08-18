@@ -304,65 +304,44 @@ SELECT * FROM INFORMATION_SCHEMA.TABLES;
 •	These are read-only views maintained by SQL Server.
 
 T-SQL Commands
-1. BEGIN TRANSACTION & COMMIT
-•	A transaction ensures multiple queries execute as a single unit.
-•	If everything is successful, use COMMIT.
 BEGIN TRANSACTION;
-
 UPDATE Employees
 SET Salary = Salary + 1000
-WHERE EmpID = 1;
-
+WHERE EmpID = 101;
 UPDATE Employees
 SET Salary = Salary + 2000
-WHERE EmpID = 2;
+WHERE EmpID = 102;
+COMMIT;
+Select * from Employees;
 
-COMMIT;  -- Saves both changes permanently
- If no error occurs, both salary updates are saved.
-
- 2. ROLLBACK
-•	If something goes wrong, we can undo all changes.
 BEGIN TRANSACTION;
-
+Select * from Employees;
 UPDATE Employees
 SET Salary = Salary + 5000
-WHERE EmpID = 3;
-
+WHERE EmpID =103;
 --  Realized it’s wrong
 ROLLBACK;
-
+select * from employees;
 -- No changes saved
 
- 3. SAVEPOINT
-•	Allows rolling back part of a transaction instead of everything.
 BEGIN TRANSACTION;
-
 UPDATE Employees
 SET Salary = Salary + 1000
-WHERE EmpID = 4;
-
+WHERE EmpID = 104;
 SAVE TRANSACTION Point1;  -- Savepoint created
-
 UPDATE Employees
 SET Salary = Salary + 2000
-WHERE EmpID = 5;
-
+WHERE EmpID = 101;
 ROLLBACK TRANSACTION Point1; -- Undo only changes after Point1
-
 COMMIT;  -- First update remains
- Here, EmpID=4 update is kept, but EmpID=5 update is undone.
 
- 4. Nested Transactions (Optional Demo)
 BEGIN TRANSACTION;
-
-UPDATE Employees SET Salary = Salary + 1000 WHERE EmpID = 6;
-
+UPDATE Employees SET Salary = Salary + 1000 WHERE EmpID = 104;
 BEGIN TRANSACTION;  -- Nested
-UPDATE Employees SET Salary = Salary + 2000 WHERE EmpID = 7;
+UPDATE Employees SET Salary = Salary + 2000 WHERE EmpID = 103;
 COMMIT; -- Only marks inner transaction complete
-
-ROLLBACK;  -- Undoes all (outer transaction not committed)
-
+ROLLBACK;  -- Undoes all
+Select * from employees;
 
 
 
