@@ -140,6 +140,13 @@ FROM Employees
 GROUP BY DeptID
 HAVING AVG(Salary) > 65000;
 
+SELECT TOP 1 d.Loc, AVG(e.Salary) AS AvgSalary
+FROM Employees e
+JOIN Department d ON e.DeptID = d.DeptID
+GROUP BY d.Loc
+ORDER BY AVG(e.Salary) DESC;
+
+
 Step 6 – Using WHERE + HAVING together
 Example: Consider only female employees, then apply HAVING
 SELECT 
@@ -295,6 +302,69 @@ SELECT * FROM sys.views;
 -- List all tables
 SELECT * FROM INFORMATION_SCHEMA.TABLES;
 •	These are read-only views maintained by SQL Server.
+
+T-SQL Commands
+1. BEGIN TRANSACTION & COMMIT
+•	A transaction ensures multiple queries execute as a single unit.
+•	If everything is successful, use COMMIT.
+BEGIN TRANSACTION;
+
+UPDATE Employees
+SET Salary = Salary + 1000
+WHERE EmpID = 1;
+
+UPDATE Employees
+SET Salary = Salary + 2000
+WHERE EmpID = 2;
+
+COMMIT;  -- Saves both changes permanently
+ If no error occurs, both salary updates are saved.
+
+ 2. ROLLBACK
+•	If something goes wrong, we can undo all changes.
+BEGIN TRANSACTION;
+
+UPDATE Employees
+SET Salary = Salary + 5000
+WHERE EmpID = 3;
+
+--  Realized it’s wrong
+ROLLBACK;
+
+-- No changes saved
+
+ 3. SAVEPOINT
+•	Allows rolling back part of a transaction instead of everything.
+BEGIN TRANSACTION;
+
+UPDATE Employees
+SET Salary = Salary + 1000
+WHERE EmpID = 4;
+
+SAVE TRANSACTION Point1;  -- Savepoint created
+
+UPDATE Employees
+SET Salary = Salary + 2000
+WHERE EmpID = 5;
+
+ROLLBACK TRANSACTION Point1; -- Undo only changes after Point1
+
+COMMIT;  -- First update remains
+ Here, EmpID=4 update is kept, but EmpID=5 update is undone.
+
+ 4. Nested Transactions (Optional Demo)
+BEGIN TRANSACTION;
+
+UPDATE Employees SET Salary = Salary + 1000 WHERE EmpID = 6;
+
+BEGIN TRANSACTION;  -- Nested
+UPDATE Employees SET Salary = Salary + 2000 WHERE EmpID = 7;
+COMMIT; -- Only marks inner transaction complete
+
+ROLLBACK;  -- Undoes all (outer transaction not committed)
+
+
+
 
 
 6.3 Understanding Stored Procedures and Their Key Benefits
