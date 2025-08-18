@@ -286,7 +286,7 @@ CREATE VIEW EmpSalaryView
 WITH SCHEMABINDING
 AS
 SELECT DeptID, COUNT(*) AS NumEmployees, SUM(Salary) AS TotalSalary
-FROM Employees
+FROM dbo.Employees
 GROUP BY DeptID;
 
 -- Now create clustered index (mandatory for indexed view)
