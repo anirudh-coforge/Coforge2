@@ -151,6 +151,25 @@ WHERE Gender = 'F'
 GROUP BY DeptID
 HAVING COUNT(*) >= 2;
 
+SELECT 
+    d.DeptName,
+    COUNT(e.EmpID) AS NumEmployees,
+    AVG(e.Salary) AS AvgSalary
+FROM Employees e
+JOIN Department d ON e.DeptID = d.DeptID
+WHERE e.DeptID <> 4
+GROUP BY d.DeptName
+HAVING AVG(e.Salary) > 65000;
+
+SELECT 
+    DeptID,
+    COUNT(*) AS NumEmployees,
+    AVG(Salary) AS AvgSalary
+FROM Employees
+WHERE DeptID <> 4   -- exclude Sales department (DeptID = 4)
+GROUP BY DeptID
+HAVING AVG(Salary) > 65000;
+
 6. Views and Stored Procedures
 
 6.1  SQL Views
