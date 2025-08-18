@@ -1,0 +1,668 @@
+What is Shell Scripting?
+•	A shell script is a text file that contains a series of commands written for the Unix/Linux shell (command-line interpreter like bash, sh, zsh).
+•	Instead of typing commands one by one in the terminal, you put them inside a script file and run it as a program.
+
+Why use Shell Scripting?
+•	To automate repetitive tasks (like backups, monitoring, file management).
+•	To combine multiple Linux commands into one program.
+•	To create custom utilities.
+
+Example
+Normally, if you run these commands manually:
+mkdir testdir
+cd testdir
+touch file1.txt file2.txt
+ls -l
+Instead, you can put them in a script myscript.sh:
+#!/bin/bash
+mkdir testdir
+cd testdir
+touch file1.txt file2.txt
+ls -l
+Run it once → and it does everything automatically 
+
+Shell scripting = Writing Linux commands in a file, giving it logic (like variables, loops, conditions), and automating tasks.
+
+Task Management in Linux
+Configuring Cron Jobs
+In Oracle Linux, cron is a time-based job scheduler used to automate repetitive tasks such as backups, system updates, monitoring scripts, and more.
+
+1. What is cron?
+The cron daemon (crond) runs in the background and executes scheduled tasks, known as cron jobs, based on time and date settings defined in a special file called the crontab.
+
+2. Basic Format of a Cron Job
+Each line in the crontab follows this format:
+
+3. Viewing and Editing Crontab
+To view or edit the current user's cron jobs:
+crontab -e
+To view the crontab:
+crontab -l
+To remove the crontab:
+crontab -r
+
+4. Example Cron Jobs
+Backup every day at 2 AM:
+0 2 * * * /home/oracle/scripts/backup.sh
+Run a script every 5 minutes:
+*/5 * * * * /usr/local/bin/check_status.sh
+Restart Apache every Sunday at midnight:
+0 0 * * 0 systemctl restart httpd
+
+5. System-Wide Cron Jobs
+•	Stored in: /etc/crontab
+•	Also: /etc/cron.d/, /etc/cron.daily/, /etc/cron.hourly/
+Example from /etc/crontab:
+SHELL=/bin/bash
+PATH=/sbin:/bin:/usr/sbin:/usr/bin
+30 3 * * * root /usr/bin/yum update -y
+This runs a system update as root every day at 3:30 AM.
+
+
+
+What is cron?
+•	Cron is a job scheduler in Unix/Linux systems.
+•	It lets you run scripts or commands automatically at specific times/dates.
+•	Example: You can schedule a backup every night at 2 AM.
+
+Where is it configured?
+Jobs are listed in a crontab (cron table) file.
+To edit your crontab:
+crontab -e
+To list your scheduled jobs:
+crontab -l
+Crontab Format
+The syntax has 5 time fields + command:
+*  *  *  *  *  command_to_run
+│  │  │  │  │
+│  │  │  │  └── Day of week (0-6, Sunday=0)
+│  │  │  └───── Month (1-12)
+│  │  └──────── Day of month (1-31)
+│  └─────────── Hour (0-23)
+└────────────── Minute (0-59)
+
+Examples
+1.	Run script every minute:
+* * * * * /home/user/myscript.sh
+2.	Run at 2:30 AM daily:
+30 2 * * * /home/user/backup.sh
+3.	Run at 5 PM every Friday:
+0 17 * * 5 /home/user/report.sh
+4.	Run every 10 minutes:
+*/10 * * * * /home/user/check.sh
+Always test your script first manually:
+./myscript.sh
+Then put it in crontab.
+<<<bash shell>>>>
+Advantages: 
+	We can access our OS more effectively and efficiently
+	Makes it lot easier and fun to work at OS level
+	Automation
+	Run sequence commands in a single command
+	Easy to use and maintain
+	Quick start 
+	Interactive debugging
+
+Disadvantages:
+	Prone to costly errors
+	Design flaws within the syntax
+
+=============================================
+Basic commands::
+1. pwd: present working directory
+2. ls: list the files in the directory
+	in linux, if the file starts with '.',then it is hidden
+	if we want to see hidden files as well, 'ls -a'
+	if we want to see detailed descriptions of files present >> 'ls -al' or 'll'
+ 
+	drwxrwxr-x 2(link counts) ubuntu ubuntu  4096 Apr 21 06:15[last modified time] scripting 
+
+3. mkdir: make directory >> usage: mkdir directory-name
+4. cd: change directory
+	to come back to previous directory: 'cd ..'
+5. rmdir: remove the directory
+6. touch: create a empty file >>> usage: touch filename
+7. rm: remove the file
+
+8. echo: print/displays the output in terminal
+9. cat: shows the content of the file
+10. df : datafiles/file systems mounted
+11. hostname : displays hostname of the machine
+11. I want to change my hostname: hostnamectl set-hostname scripting-machine
+12. sudo: gives user a permission to act like root user
+13. if I am a sudo user and I want to become root user: sudo su[su - switch user]
+
+
+In linux terminals, to write inside a file, there are two main editors: 1. vim editor, 2. nano editor
+
+<<<<<Vim editor>>>>>
+
+vim editor : it is a text editor for teminal
+
+To create a file if not present or open an existing one: >>> 'vi filename'  or  'vim filename'
+
+view the file: >>> view filename
+
+Two modes of vi editor:
+
+1. Insert mode >>> used to insert the text in the file
+	>>> to go inside INSERT mode, press Esc key and type 'i'
+2. command mode >>> used to execute vi editor commands in the vi editor
+	>>> to go into command mode, press Esc key and type ':'
+
+How to get out of the vi editor: >>>
+	Go into command mode [Press Esc] and type ':q'
+	To override the changes and quit without writing(saving) the changes, use ':q!'
+
+How to save(write) in the file:
+	Go into the command mode after making changes in the file
+	Press Esc key, type ':wq'
+
+To verify, do 'cat filename' and display the content of the file in terminal
+
+Dive little bit deep in vi editor:
+
+Create a new file with command >>> 'vi  insert-options'
+
+After pressing Esc key, there are other options in insert mode::
+Inserting the text>>>>>
+'i' : Insert the text at the current cursor location
+'I' : Insert the text at the beginning of current line
+'a' : Insert the text after the current cursor location
+'A' : Insert the text at the end of the current line
+'o' : Create a new line for entering the text below the cursor location
+'O' : Create a new line for entering the text above the cursor location
+
+Moving in vi editor>>>>
+'k' : move up 
+'j' : move down
+'h' : move left
+'l' : move right
+
+Deleting the text>>>>>
+'x' : Delete the text after the cursor
+'X' : Delete the text before the cursor
+'dw' : Delete the word from current cursor location to the next word
+'d^' : Delete till the start of the line from current cursor location
+'dd' : Delete the entire line on which the cursor is present
+
+Searching the text>>>>
+To search, press Esc key and then press either '/' or '?' and start typing the pattern we are searching for.
+Searched pattern will get highlighted, then if you press Enter, the cursor will go where the pattern is found.
+Then we can go into INSERT mode by pressing Esc and then 'i' and start inserting
+
+To search a word which is occurring multiple times, just search as above and after pressing Enter, press 'n' to move to the
+next occurance of the word.
+
+=======================================================================================================
+
+To create a bash script, it should have an extension which is '.sh'.
+for example: my-script.sh
+
+Requirements to execute a script:
+	shell
+	absolute path of the script
+	arguments (if any)
+
+To execute the bash script, there are two ways to do this::
+1) 'bash my-script.sh'
+		[suppose we are not in the directory where our script is present, then we will give entire path]
+		'bash /home/ubuntu/scripting/my-script.sh'
+		
+	'bash my-script.sh' >>>> bash is shell that we are using
+						>>>> my-script.sh is the script we are executing
+
+2) './my-script.sh'
+	To execute the script with above command, we have to make our script executable.
+	We should give execution permissions.
+
+"Location of bash shell is '/bin/bash'"
+
+Script is a file which contains commands which wil get executed one by one [sequentilly]
+
+To make the script executable, we will use 'chmod'
+command>>>> chmod +x first-script.sh    [change the permissions]
+
+[[[[[
+
+rwx as permissions:: symbolic mode
+But there is different way to give permissions
+numeric mode>>>>
+rwx			rwx			rwx
+421			420		400
+7			6			4
+chmod 777 first-script.sh
+
+0	000	- - - 	No Permissions
+1	001		- - x	Only Execute
+2	010		- w -	Only Write
+3	011		- w x	Write and Execute
+4	100		r - -	Only Read
+5	101		r - x	Read and Execute
+6	110 	r w -	Read and Write
+7	111		r w x 	Read, write and execute
+
+]]]]]]
+
+
+Example 1::
+Create a script with 'vi script-name.sh'
+Inside the script, add 3-4 echo commands and don't forget to add '#!/bin/bash'
+save the script
+Execute it with bash script-name.sh
+Then give executable permissions 'chmod +x script-name.sh' and try ./script-name.sh
+
+===============================================
+Example 2:
+Adding comments in our bash script>>>
+Single line comments : #This is a comment
+Multi-line comments : : ' This is also a comment
+						This is not a normal comment,
+						This is a multi-line comment
+						'
+================================================
+Example 3:
+Variables in Bash>>>
+	The variables don't have a data type. 
+	a = "something"
+	b = 7
+	To use or call these variables, we use 'doller sign ($)'
+	$a >>>> "something"
+
+Two types of variables in bash>>>
+1. user defined variables : Variables defined by user. [mostly written in small letters(not compulsory)]
+2. System defined variables : Variables defined by the SYSTEM
+	What are these system defined variables??
+		BASH, BASH_VERSION, HOME, OSTYPE, PWD, USER
+	To call these variables: 
+		echo $BASH
+		echo $BASH_VERSION
+		echo $HOME
+		echo $OSTYPE
+		echo $PWD
+		echo $USER
+
+	>> If you want to check what are all the variables present in our system, use commands 'printenv' or 'env'
+
+#!/bin/bash
+test="Automation is very fantastic"
+secondtest="This is second variable"
+echo $test
+echo $secondtest
+#SYSTEM defined variables
+echo $BASH
+echo $BASH_VERSION
+echo $HOME
+echo $OSTYPE
+echo $PWD
+echo $USER
+
+=======================================================
+#!/bin/bash
+name="Maddy"
+like="The Batman"
+
+echo "Hi there!! I am $name and I like $like"
+
+
+>>> chmod +x variable-1.sh
+>>> ./variable-1.sh
+=============================
+
+[mv old-filename new-filename.sh]     >>>>>    Renaming the file
+
+=============================
+
+We want to get the variable values from user>>>
+
+#!/bin/bash
+echo "Hey, What is your name?"
+read name
+echo "Please tell me what do you like?"
+read like
+echo "Thank you $name and we are glad that you like $like"
+
+========================================================
+Conditions in bash>>>>
+1) if statement>>
+[	if (this is this)
+		then 
+			do this
+		else
+			do that
+]
+
+syntax for bash:
+	if [condition];
+		then
+			task
+		else
+			other task
+	fi
+if statement example:
+#!/bin/bash
+echo "Tell us the number in your mind."
+read number
+if [[ $number -gt 50 ]]		#if [$number > 50]
+	then
+		echo "Great!! Your number is greater than 50."
+	else
+		echo "Sorry!! Your number is less that 50."
+fi
+
+Bash 'if' operators for numbers:
+-eq : equal to
+-ne : not equal to
+-lt : less than
+-gt : greater than
+-le : less than or equal to
+-ge : greater than or equal to
+
+=====================================
+
+There's defined variable called UID(User identifier):
+Always, in linux, root user has UID equal to 0.
+
+#!/bin/bash
+if [[ $UID -eq 0 ]]
+then
+echo "You are a root user!!"
+else
+echo "You are not a root user!!"
+fi
+ 
+
+
+[there is a file called sudoers, in which we will add our user to which we want to provide root privilages]
+
+
+
+===============================================
+
+if statement with AND logic:
+if [condition1 && condition2]
+	then
+		do this
+	else
+		do this
+fi
+
+Example of username and password>>>>
+
+#!/bin/bash
+echo "Please enter your username"
+read username
+echo "Please enter your password"
+read password
+if [[ ( $username == "maddy" && $password == "scripting" ) ]]		#it will work with one '=' as well
+then
+echo "Congrats!! You are authorised."
+else
+echo "Sorry, you can't go ahead."
+fi
+
+==========================================
+
+if statement with OR logic:
+
+#!/bin/bash
+echo "Enter a number"
+read number
+if [[ ( $number -eq 50 || $number -eq 100 )]]
+then
+echo "You won :)"
+else
+echo "You lost :("
+fi
+
+Bash 'if' operators for string >>>
+'==' or '=' : equal to
+!= : not equal to
+-z string : checks if the string is empty
+-n string : checks if the string is not empty
+
+=============================================
+
+else if statement>>
+
+if [condition]
+	then
+		do this
+else if [condition2]
+	then 
+		do this
+else
+	do that
+
+In case of bash, below is the syntax >>>>
+if [[ condition ]]
+then
+	task
+elif [[ another condition ]]
+then 
+	some other task
+else
+	do something else
+fi
+
+Example for elif statement >>>
+
+#!/bin/bash
+echo "Enter the 200s scored by Rohit:"
+read score
+if [[ $score -eq 264 ]]
+then
+echo "Perfect, that's the highest score in ODI"
+elif [[ $score -eq 219 ]]
+then
+echo "You are right!! One more double hundread!!"
+elif [[ $score -eq 209 ]]
+then
+echo "That's three double hundreads in ODIs"
+else
+echo "This score is not scored by Rohit"
+fi
+
+==================================================
+case statement in Bash >>>>
+case [expression]
+	expression = what we have given
+		do this task
+	expression = other expression
+		do that task
+
+case syntax in Bash >>>
+
+case expression in
+option1)
+do the task ;;
+option2)
+do the task ;;
+option3)
+do the task ;;
+*)
+do the other task ;;
+esac
+
+Example for case statement in bash >>>>>
+
+#!/bin/bash
+echo "Enter the marks you scored:"
+read marks
+case $marks in
+300)
+echo "Congrats!! You recieved first prize." ;;
+200)
+echo "You recieved second prize." ;;
+100)
+echo "You came in third place." ;;
+*)
+echo "Try harder next time." ;;
+esac
+
+======================================================
+
+Loops in scripting >>>
+
+for (start; end; increment) {
+	perform our task as mentioned in for condition
+}
+
+for loop in bash :
+
+for (( counter = 0; counter >n; counter++ ))
+do
+	tasks
+done
+
+example of for loop:
+
+#!/bin/bash
+echo "Enter till what number you want the number printed"
+read number
+for (( counter=1; counter < $number+1; counter++ ))
+do
+echo $counter
+done
+
+=====================================================
+
+while loop in bash >>>>
+syntax for while loop in bash:
+while [condition]
+do
+	[tasks]
+done
+
+example for while loop in bash>>>
+#!/bin/bash
+echo "Give me a number less than 10"
+read number
+while [ $number -le 10 ]
+do
+echo $number
+(( number++ ))
+done
+
+Functions in Bash>>
+Basic syntax:
+1)>>
+function_name () {		#defining the function
+	we will write our function(commands) here
+}
+
+function_name		#calling the function
+
+
+2)>>
+function function_name {
+
+}
+
+
+Simple function example>>
+#!/bin/bash
+simple_function () {
+	echo "This is a simple function."
+}
+
+function another_function {
+	echo "This is an another function."
+}
+
+simple_function
+another_function
+
+=========================================
+
+Basic Shell Scripting Concepts 
+1. Variables
+In shell scripting, variables store values like text, numbers, or paths.
+#!/bin/bash
+# variables.sh
+
+NAME="Maddy"
+FOLDER="/mnt/c/Users/user/test"
+
+echo "Hello $NAME, your folder is $FOLDER"
+ Real-world use: Store paths, filenames, or usernames so you don’t repeat them everywhere.
+Example: backup scripts often use a variable for the source and destination folder.
+
+2. Conditionals (if-else)
+Used to check conditions (like file exists, user input, etc.).
+#!/bin/bash
+# check_backup.sh
+
+BACKUP="/mnt/c/Users/user/backup"
+
+if [ -d "$BACKUP" ]; then
+    echo "Backup folder exists: $BACKUP"
+else
+    echo "Backup folder not found. Creating now..."
+    mkdir -p $BACKUP
+fi
+Real-world use: Ensure directories exist before saving backups, check if a service is running, or verify a file is present before processing.
+
+3. Loops
+(a) For loop
+Repeat commands for a list of items.
+#!/bin/bash
+# loop_files.sh
+
+for FILE in /mnt/c/Users/user/test/*.sh
+do
+    echo "Found script: $FILE"
+done
+ Real-world use: Scan through log files, batch process files, or loop over multiple servers.
+
+(b) While loop
+Run until a condition is false.
+#!/bin/bash
+# countdown.sh
+
+COUNT=5
+while [ $COUNT -gt 0 ]
+do
+    echo "Shutting down in $COUNT seconds..."
+    sleep 1
+    COUNT=$((COUNT - 1))
+done
+ Real-world use: Retry a failed operation, monitor a service, or create a countdown before shutdown.
+
+4. Case Statement
+Good for menus or multiple options.
+#!/bin/bash
+# menu.sh
+
+echo "Choose an option:"
+echo "1. Show date"
+echo "2. List files"
+echo "3. Show current user"
+
+read -p "Enter choice: " CHOICE
+
+case $CHOICE in
+    1) date ;;
+    2) ls -l ;;
+    3) whoami ;;
+    *) echo "Invalid choice" ;;
+esac
+Real-world use: Create menu-driven scripts for automation tasks, like system maintenance or developer toolkits.
+
+5. Functions
+Group reusable code.
+#!/bin/bash
+# functions.sh
+
+backup_folder() {
+    SRC="/mnt/c/Users/user/test"
+    DEST="/mnt/c/Users/user/backup"
+    DATE=$(date +%Y-%m-%d)
+
+    mkdir -p $DEST
+    tar -czf $DEST/test_backup_$DATE.tar.gz $SRC
+    echo "Backup done: $DEST/test_backup_$DATE.tar.gz"
+}
+
+backup_folder
+
