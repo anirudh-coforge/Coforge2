@@ -170,6 +170,16 @@ WHERE DeptID <> 4   -- exclude Sales department (DeptID = 4)
 GROUP BY DeptID
 HAVING AVG(Salary) > 65000;
 
+SELECT 
+    d.DeptName,
+    COUNT(e.EmpID) AS NumEmployees,
+    AVG(e.Salary) AS AvgSalary
+FROM Employees e, Department d
+WHERE e.DeptID = d.DeptID
+  AND e.DeptID <> 4
+GROUP BY d.DeptName
+HAVING AVG(e.Salary) > 65000;      -- without JOIN Keyword
+
 6. Views and Stored Procedures
 
 6.1  SQL Views
@@ -246,67 +256,46 @@ Types of Views
 3.	Indexed Views → Materialized, stores result physically (improves performance).
 4.	System Views → Provided by SQL Server for metadata (INFORMATION_SCHEMA, sys.views).
 
-Simple View (Single table only)
--- Simple View: Get all Employees with only basic details
-CREATE VIEW vw_SimpleEmployees
-AS
+1. Simple View (Single Table)
+ A view created on one table only.
+CREATE VIEW EmpBasicInfo AS
 SELECT EmpID, EmpName, Salary
 FROM Employees;
-GO
+•	This shows only basic employee details from a single table.
 
--- Use the view
-SELECT * FROM vw_SimpleEmployees;
- Explanation:
-This view is based only on the Employees table → no joins, no aggregation.
-
-2. Complex View (Joins / Group By etc.)
--- Complex View: Join Employees and Department with aggregation
-CREATE VIEW vw_DeptWiseSalary
-AS
-SELECT d.DeptName, COUNT(e.EmpID) AS TotalEmployees, AVG(e.Salary) AS AvgSalary
-FROM Department d
-JOIN Employees e ON d.DeptID = e.DeptID
+2. Complex View (Multiple Tables / Aggregation / Grouping)
+ A view combining multiple tables or involving aggregations.
+CREATE VIEW DeptEmpSummary AS
+SELECT d.DeptName, COUNT(e.EmpID) AS NumEmployees, AVG(e.Salary) AS AvgSalary
+FROM Department d, Employees e
+WHERE d.DeptID = e.DeptID
 GROUP BY d.DeptName;
-GO
-
--- Use the view
-SELECT * FROM vw_DeptWiseSalary;
- Explanation:
-This view combines multiple tables and uses JOIN + GROUP BY.
+•	Combines Department and Employees with GROUP BY.
 
 3. Indexed View (Materialized View)
- For Indexed Views, SQL Server requires WITH SCHEMABINDING and some rules (like COUNT_BIG, no *, etc.).
--- Indexed View: Dept Wise Employee Count
-CREATE VIEW vw_IndexedDeptCount
+SQL Server physically stores the view result. This boosts performance for heavy queries.
+•	Requires WITH SCHEMABINDING + clustered index.
+CREATE VIEW EmpSalaryView
 WITH SCHEMABINDING
 AS
-SELECT d.DeptID, COUNT_BIG(*) AS EmpCount
-FROM dbo.Employees e
-JOIN dbo.Department d ON e.DeptID = d.DeptID
-GROUP BY d.DeptID;
-GO
+SELECT DeptID, COUNT_BIG(*) AS NumEmployees, SUM(Salary) AS TotalSalary
+FROM dbo.Employees
+GROUP BY DeptID;
 
--- Create unique clustered index on the view
-CREATE UNIQUE CLUSTERED INDEX IX_vw_IndexedDeptCount
-ON vw_IndexedDeptCount (DeptID);
-GO
+-- Now create clustered index (mandatory for indexed view)
+CREATE UNIQUE CLUSTERED INDEX IDX_EmpSalaryView 
+ON EmpSalaryView(DeptID);
+•	Stores aggregated salary info physically, so queries run faster.
 
--- Use the view
-SELECT * FROM vw_IndexedDeptCount;
- Explanation:
-•	Stores the result physically.
-•	Improves performance for aggregate queries.
+4. System Views (Predefined Metadata Views in SQL Server)
+SQL Server provides metadata views like INFORMATION_SCHEMA or sys.
+-- List all user-defined views
+SELECT * FROM sys.views;
 
-4. System Views (Provided by SQL Server)
-SQL Server automatically provides metadata views.
--- System View: Get all user-defined views
-SELECT name, object_id, create_date, modify_date
-FROM sys.views;
+-- List all tables
+SELECT * FROM INFORMATION_SCHEMA.TABLES;
+•	These are read-only views maintained by SQL Server.
 
--- System View: Get all columns in Employees table
-SELECT COLUMN_NAME, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, IS_NULLABLE
-FROM INFORMATION_SCHEMA.COLUMNS
-WHERE TABLE_NAME = 'Employees';
 
 6.3 Understanding Stored Procedures and Their Key Benefits
 •	A Stored Procedure (SP) is a precompiled collection of SQL statements stored in the database.
