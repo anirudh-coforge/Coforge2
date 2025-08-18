@@ -285,8 +285,8 @@ SQL Server physically stores the view result. This boosts performance for heavy 
 CREATE VIEW EmpSalaryView
 WITH SCHEMABINDING
 AS
-SELECT DeptID, COUNT_BIG(*) AS NumEmployees, SUM(Salary) AS TotalSalary
-FROM dbo.Employees
+SELECT DeptID, COUNT(*) AS NumEmployees, SUM(Salary) AS TotalSalary
+FROM Employees
 GROUP BY DeptID;
 
 -- Now create clustered index (mandatory for indexed view)
