@@ -1,0 +1,343 @@
+Introduction to Structured Query Language (SQL)
+•	What is SQL?
+Structured Query Language (SQL) is the standard language used to interact with relational databases.
+Think of it as a way to communicate with databases to store, retrieve, and manage data.
+•	Why SQL?
+o	Every business uses data (banking, e-commerce, healthcare).
+o	SQL helps us manage and analyze data effectively.
+o	Works with most databases: SQL Server, MySQL, PostgreSQL, Oracle, etc.
+•	Categories of SQL Commands:
+o	DDL (Data Definition Language): Create and modify structure → CREATE, ALTER, DROP
+o	DML (Data Manipulation Language): Manage data → INSERT, UPDATE, DELETE
+o	DQL (Data Query Language): Fetch data → SELECT
+o	DCL (Data Control Language): Control access → GRANT, REVOKE
+o	TCL (Transaction Control Language): Manage transactions → COMMIT, ROLLBACK, SAVEPOINT
+Example:
+CREATE DATABASE CompanyDB;
+USE CompanyDB;
+
+CREATE TABLE Employee (
+    EmpID INT PRIMARY KEY,
+    EmpName VARCHAR(50),
+    Salary DECIMAL(10,2)
+);
+
+INSERT INTO Employee VALUES (1, 'Alice', 50000), (2, 'Bob', 60000);
+•	
+•	SELECT * FROM Employee;
+
+1.4 Understanding SQL Server Management Studio (SSMS)
+•	What is SSMS?
+SQL Server Management Studio (SSMS) is a free tool by Microsoft to manage SQL Server.
+It provides a Graphical User Interface (GUI) + a Query Editor.
+•	Key Features for Beginners:
+o	Connect to database servers easily.
+o	Create, manage, and query databases.
+o	Visual tools for designing tables, relationships, and stored procedures.
+o	Object Explorer → browse all tables, views, stored procedures.
+•	Hands-on Demo Flow:
+1.	Open SSMS → Connect with Windows Authentication.
+2.	In Object Explorer, expand Databases → Right-click → New Database.
+3.	Write queries in the Query Window.
+4.	Execute queries and view results in the Results Pane.
+
+1.5 SQL Table Basics
+Tables are the core of any database.
+They store data in rows (records) and columns (fields).
+Basic Concepts:
+Row → Single record (e.g., one employee).
+Column → Attribute/field (e.g., Name, Salary).
+Primary Key → Unique identifier for each row.
+Foreign Key → Links two tables together.
+Creating a Table:
+CREATE TABLE Department (
+    DeptID INT PRIMARY KEY,
+    DeptName VARCHAR(50)
+);
+
+Inserting Data:
+INSERT INTO Department VALUES (1, 'IT'), (2, 'HR');
+Querying Data:
+SELECT * FROM Department;
+Relating Tables (Foreign Key):
+ALTER TABLE Employee
+ADD DeptID INT FOREIGN KEY REFERENCES Department(DeptID);
+
+ACID Properties in SQL Server
+When working with databases, transactions must be reliable.
+SQL Server ensures this reliability using the ACID properties:
+1. Atomicity
+•	All or Nothing rule.
+•	A transaction should either complete fully or not at all.
+•	Example: If money is debited from one account but not credited to another, the transaction rolls back.
+BEGIN TRANSACTION
+   UPDATE Accounts SET Balance = Balance - 1000 WHERE AccID = 101;  -- Debit
+   UPDATE Accounts SET Balance = Balance + 1000 WHERE AccID = 102;  -- Credit
+COMMIT TRANSACTION;
+If the second query fails, the first also rolls back.
+
+2. Consistency
+•	Ensures that the database goes from one valid state to another.
+•	All integrity constraints (like primary keys, foreign keys, data types) are preserved.
+Example: You cannot insert a row in the Child Table if the Parent Table key doesn’t exist.
+
+3. Isolation
+•	Transactions running at the same time should not interfere with each other.
+•	Example: If two users try to book the last movie ticket, only one succeeds.
+•	SQL Server provides Isolation Levels:
+o	Read Uncommitted
+o	Read Committed (Default)
+o	Repeatable Read
+o	Serializable
+o	Snapshot
+
+4. Durability
+•	Once a transaction is committed, the changes are permanent – even if the server crashes.
+•	SQL Server writes committed transactions to the transaction log for recovery.
+Step 1 – Insert more departments with repeating locations
+INSERT INTO Department VALUES
+(5, 'Marketing', 'Chicago'),
+(6, 'Support', 'New York'),
+(7, 'Operations', 'Chicago');
+Check data:
+SELECT * FROM Department;
+
+Step 2 – Insert more employees into those departments
+INSERT INTO Employees VALUES
+(106, 'Ethan', 'M', 55000, 5, 'ethan@coforge.com'),
+(107, 'Fiona', 'F', 62000, 6, 'fiona@coforge.com'),
+(108, 'George', 'M', 71000, 7, 'george@coforge.com'),
+(109, 'Hannah', 'F', 68000, 2, 'hannah@coforge.com'),
+(110, 'Ian', 'M', 50000, 5, 'ian@coforge.com');
+Check data:
+SELECT * FROM Employees;
+
+Step 3 – Aggregate functions (overall)
+SELECT 
+    COUNT(*) AS TotalEmployees,
+    AVG(Salary) AS AvgSalary,
+    SUM(Salary) AS TotalSalary,
+    MIN(Salary) AS MinSalary,
+    MAX(Salary) AS MaxSalary
+FROM Employees;
+
+Step 4 – Aggregate functions with GROUP BY (by DeptID)
+SELECT 
+    DeptID,
+    COUNT(*) AS NumEmployees,
+    AVG(Salary) AS AvgSalary,
+    SUM(Salary) AS DeptSalaryBill
+FROM Employees
+GROUP BY DeptID;
+
+Step 5 – Aggregate functions with GROUP BY and HAVING
+Example: only show departments where average salary > 65000
+SELECT 
+    DeptID,
+    COUNT(*) AS NumEmployees,
+    AVG(Salary) AS AvgSalary
+FROM Employees
+GROUP BY DeptID
+HAVING AVG(Salary) > 65000;
+
+Step 6 – Using WHERE + HAVING together
+Example: Consider only female employees, then apply HAVING
+SELECT 
+    DeptID,
+    COUNT(*) AS FemaleCount,
+    AVG(Salary) AS FemaleAvgSalary
+FROM Employees
+WHERE Gender = 'F'
+GROUP BY DeptID
+HAVING COUNT(*) >= 2;
+
+6. Views and Stored Procedures
+
+6.1  SQL Views
+•	A view is a virtual table based on the result of a query.
+•	It does not store data physically; instead, it pulls data from underlying base tables whenever queried.
+•	Example:
+-- Base tables
+CREATE TABLE Department (
+    DeptID INT PRIMARY KEY,
+    DeptName VARCHAR(50),
+    Location VARCHAR(50)
+);
+
+CREATE TABLE Employees (
+    EmpID INT PRIMARY KEY,
+    EmpName VARCHAR(50) NOT NULL,
+    Gender CHAR(1),
+    Salary DECIMAL(10,2),
+    DeptID INT,
+    EmailID VARCHAR(50) UNIQUE,
+    FOREIGN KEY (DeptID) REFERENCES Department(DeptID)
+);
+
+-- Insert data
+INSERT INTO Department VALUES 
+(1, 'HR', 'Delhi'),
+(2, 'IT', 'Delhi'),
+(3, 'Finance', 'Mumbai');
+
+INSERT INTO Employees VALUES
+(101, 'Amit', 'M', 50000, 1, 'amit@abc.com'),
+(102, 'Meena', 'F', 60000, 2, 'meena@abc.com'),
+(103, 'John', 'M', 55000, 2, 'john@abc.com'),
+(104, 'Rita', 'F', 45000, 3, 'rita@abc.com');
+-- Create a view
+CREATE VIEW vw_EmployeeDetails AS
+SELECT e.EmpID, e.EmpName, e.Salary, d.DeptName, d.Location
+FROM Employees e
+JOIN Department d ON e.DeptID = d.DeptID;
+
+-- Query the view
+SELECT * FROM vw_EmployeeDetails;
+
+6.2 Methods of Creating, Using, Altering, Renaming, Dropping Views
+-- Create View
+CREATE VIEW vw_HighSalaryEmployees AS
+SELECT EmpName, Salary FROM Employees WHERE Salary > 55000;
+
+-- Use View
+SELECT * FROM vw_HighSalaryEmployees;
+
+-- Alter View
+ALTER VIEW vw_HighSalaryEmployees AS
+SELECT EmpName, Salary, DeptID FROM Employees WHERE Salary > 50000;
+
+-- Rename View (SQL Server way)
+EXEC sp_rename 'vw_HighSalaryEmployees', 'vw_TopEmployees';
+
+-- Drop View
+DROP VIEW vw_TopEmployees;
+ Important Notes:
+•	If base table is changed (like dropping a column used in view), the view becomes invalid and querying it throws error.
+•	If a view is dropped, the base table remains intact.
+Example:
+-- Drop column Salary from Employees
+ALTER TABLE Employees DROP COLUMN Salary;
+
+-- Now this will throw error because view depends on Salary column
+SELECT * FROM vw_EmployeeDetails;
+
+Types of Views
+1.	Simple Views → Based on single table.
+2.	Complex Views → Based on multiple tables (joins, group by, etc.).
+3.	Indexed Views → Materialized, stores result physically (improves performance).
+4.	System Views → Provided by SQL Server for metadata (INFORMATION_SCHEMA, sys.views).
+
+Simple View (Single table only)
+-- Simple View: Get all Employees with only basic details
+CREATE VIEW vw_SimpleEmployees
+AS
+SELECT EmpID, EmpName, Salary
+FROM Employees;
+GO
+
+-- Use the view
+SELECT * FROM vw_SimpleEmployees;
+ Explanation:
+This view is based only on the Employees table → no joins, no aggregation.
+
+2. Complex View (Joins / Group By etc.)
+-- Complex View: Join Employees and Department with aggregation
+CREATE VIEW vw_DeptWiseSalary
+AS
+SELECT d.DeptName, COUNT(e.EmpID) AS TotalEmployees, AVG(e.Salary) AS AvgSalary
+FROM Department d
+JOIN Employees e ON d.DeptID = e.DeptID
+GROUP BY d.DeptName;
+GO
+
+-- Use the view
+SELECT * FROM vw_DeptWiseSalary;
+ Explanation:
+This view combines multiple tables and uses JOIN + GROUP BY.
+
+3. Indexed View (Materialized View)
+ For Indexed Views, SQL Server requires WITH SCHEMABINDING and some rules (like COUNT_BIG, no *, etc.).
+-- Indexed View: Dept Wise Employee Count
+CREATE VIEW vw_IndexedDeptCount
+WITH SCHEMABINDING
+AS
+SELECT d.DeptID, COUNT_BIG(*) AS EmpCount
+FROM dbo.Employees e
+JOIN dbo.Department d ON e.DeptID = d.DeptID
+GROUP BY d.DeptID;
+GO
+
+-- Create unique clustered index on the view
+CREATE UNIQUE CLUSTERED INDEX IX_vw_IndexedDeptCount
+ON vw_IndexedDeptCount (DeptID);
+GO
+
+-- Use the view
+SELECT * FROM vw_IndexedDeptCount;
+ Explanation:
+•	Stores the result physically.
+•	Improves performance for aggregate queries.
+
+4. System Views (Provided by SQL Server)
+SQL Server automatically provides metadata views.
+-- System View: Get all user-defined views
+SELECT name, object_id, create_date, modify_date
+FROM sys.views;
+
+-- System View: Get all columns in Employees table
+SELECT COLUMN_NAME, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, IS_NULLABLE
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_NAME = 'Employees';
+
+6.3 Understanding Stored Procedures and Their Key Benefits
+•	A Stored Procedure (SP) is a precompiled collection of SQL statements stored in the database.
+•	Benefits:
+o	Improves performance.
+o	Increases reusability.
+o	Enhances security (can control permissions).
+o	Helps modular programming.
+
+6.4 Working with Stored Procedures
+-- Create Procedure
+CREATE PROCEDURE sp_GetEmployees
+AS
+BEGIN
+    SELECT EmpName, Salary FROM Employees;
+END;
+
+-- Execute Procedure
+EXEC sp_GetEmployees;
+
+-- Procedure with Parameter
+CREATE PROCEDURE sp_GetEmployeesByDept @Dept INT
+AS
+BEGIN
+    SELECT EmpName, Salary 
+    FROM Employees 
+    WHERE DeptID = @Dept;
+END;
+
+EXEC sp_GetEmployeesByDept @Dept = 2;
+
+6.5 Error Handling in Stored Procedures
+SQL Server uses TRY...CATCH for error handling.
+CREATE PROCEDURE sp_UpdateSalary
+    @EmpID INT,
+    @NewSalary DECIMAL(10,2)
+AS
+BEGIN
+    BEGIN TRY
+        UPDATE Employees
+        SET Salary = @NewSalary
+        WHERE EmpID = @EmpID;
+
+        PRINT 'Salary Updated Successfully';
+    END TRY
+    BEGIN CATCH
+        PRINT 'Error Occurred: ' + ERROR_MESSAGE();
+    END CATCH
+END;
+
+EXEC sp_UpdateSalary @EmpID = 101, @NewSalary = -100; -- Will trigger error due to Salary > 0 constraint
+
+
