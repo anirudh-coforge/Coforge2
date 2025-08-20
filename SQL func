@@ -65,3 +65,12 @@ SELECT MONTH(GETDATE()) AS CurrentMonth;
 SELECT DAY(GETDATE()) AS CurrentDay;
 SELECT DATEDIFF(YEAR, '2000-01-01', GETDATE()) AS YearsPassed;
 SELECT DATEADD(DAY, 7, GETDATE()) AS NextWeek;
+
+
+SELECT 
+    EmpID, 
+    EmpName, 
+    Gender, 
+    Salary,
+    ROW_NUMBER() OVER(PARTITION BY Gender ORDER BY Salary DESC) AS RowNum
+FROM Employees;
