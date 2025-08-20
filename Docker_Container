@@ -172,9 +172,9 @@ Build and Run
 1.	Open PowerShell or CMD in your folder:
 cd C:\Users\student\nginx-docker
 2.	Build the image:
-docker build -t my-nginx .
+docker image build -t my-nginx .
 3.	Run the container:
-docker run -d -p 8080:80 my-nginx
+docker container run -d -p 8080:80 my-nginx
 4.	Open browser → http://localhost:8080
 •	If index.html exists → you’ll see your custom page.
 •	If nginx.conf exists → it will override the default config.
