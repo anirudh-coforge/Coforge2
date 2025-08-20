@@ -30,11 +30,7 @@ END;
 GO
 
 --Usage
-SELECT 
-    EmpID,
-    EmpName,
-    Salary,
-    dbo.fn_CalculateBonus(Salary) AS Bonus
+SELECT EmpID,EmpName,Salary,dbo.fn_CalculateBonus(Salary) AS Bonus
 FROM Employees;
 
 Stored Procedure:
