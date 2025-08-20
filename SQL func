@@ -47,8 +47,9 @@ BEGIN
     WHERE DeptID = @DeptID;
 END;
 GO
+
 To execute:
-EXEC sp_GetEmployeesByDept @DeptID = 4;
+EXEC sp_GetEmployeesByDept @DeptID = 3;
 
 
 -- Inline query to get employees with salary > average
