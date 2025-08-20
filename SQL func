@@ -10,7 +10,7 @@ RETURN (
 GO
 
 -- Usage:
-SELECT * FROM fn_GetEmployeesByDept(101);
+SELECT * FROM fn_GetEmployeesByDept(2);
 
 CREATE FUNCTION fn_CalculateBonus(@Salary DECIMAL(10,2))
 RETURNS DECIMAL(10,2)
