@@ -19,3 +19,64 @@ git commit -m "first commit"
 git branch -M main
 git remote add origin https://github.com/madhuri75jha/Coforge2.git
 git push -u origin main
+-------------------------------------------------------------------------------------------------
+Git Commands Cheat Sheet
+=========================================================================================
+1. Setup & Configuration
+git config --global user.name "Your Name"         		  # Set global username
+git config --global user.email "your@email.com"  		    # Set global email
+git config --list                                 			# Show all configurations
+
+2. Create & Initialize
+git init                    						  # Initialize a new repository
+git clone <url>             						  # Clone an existing repository
+
+3. Basic Snapshotting
+git status                                                                                # Show status of working directory
+git add <file>              					  # Stage a file
+git add .                  					   # Stage all changes
+git reset <file>          					    # Unstage a file
+git diff                     					 # Show unstaged changes
+git diff --staged            					 # Show staged changes
+git commit -m "message"       				# Commit staged changes
+git commit -am "message"    				  # Add & commit tracked files
+
+4. Branching & Merging
+git branch                   					 # List branches
+git branch <branch>          				 # Create new branch
+git checkout <branch>       				  # Switch to branch
+git checkout -b <branch>   				   # Create & switch to new branch
+git merge <branch>         				   # Merge branch into current
+git branch -d <branch>     				   # Delete branch
+git switch <branch>          			 # Switch branch (newer alternative to checkout)
+git switch -c <branch>      			  # Create + switch branch
+
+5. Remote Repositories
+git remote -v               				  # Show remotes
+git remote add origin <url>   			# Add remote repository
+git push -u origin main      			 # Push branch to remote
+git push                    				  # Push commits
+git pull                     				 # Fetch + merge from remote
+git fetch                    				 # Fetch changes (without merging)
+git clone <url>              				 # Clone repo from remote
+
+6. Undoing Things
+git restore <file>           			 # Discard changes in working directory
+git restore --staged <file>  			 # Unstage a file
+git reset --soft HEAD~1     			  # Undo last commit, keep changes staged
+git reset --mixed HEAD~1   			   # Undo last commit, keep changes unstaged
+git reset --hard HEAD~1    			   # Undo last commit, discard changes
+git revert <commit>         			  # Revert a specific commit
+
+7. Stashing
+git stash                   				  # Save changes temporarily
+git stash list               				 # List stashes
+git stash apply             				  # Apply last stash
+git stash pop               				  # Apply + drop stash
+git stash drop               				 # Delete a stash
+
+8. Viewing History
+git log                     			  # View commit history
+
+
+
