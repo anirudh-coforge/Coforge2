@@ -25,3 +25,40 @@ COPY app.py .
 EXPOSE 5000
 # Run the app
 CMD ["python", "app.py"]
+
+-------------------------------------------------------
+
+ *Step 5: Build Docker Image*
+Run the following command in the project directory:
+docker image build -t flask-docker-app .
+
+Step 6: Run Docker Container
+Run the container and map port 5000:
+docker container run -d -p 5000:5000 --name flask_container flask-docker-app
+
+Step 7: Test the App
+Open browser or use curl:
+http://localhost:5000
+displays:
+Hello from Flask in Docker!
+--------------------------------------------------------
+##################Explanation of app.py
+from flask import Flask
+•	Imports the Flask class from the flask package.
+•	Flask is a micro web framework in Python that helps you quickly build web applications.
+app = Flask(__name__)
+•	Creates a Flask application object.
+•	__name__ tells Flask where to look for templates, static files, etc. (it’s the name of the current module).
+ @app.route('/')
+•	A route decorator.
+•	Defines the URL endpoint / (root of the website).
+•	When a user visits http://localhost:5000/, this function (home()) will be executed.
+def home(): return "Hello from Flask in Docker!"
+•	The function returns a plain text response.
+•	This is what the browser shows when you hit the / route.
+ if __name__ == '__main__':
+•	Ensures that the app runs only if you execute the file directly (not if it’s imported as a module).
+ app.run(host='0.0.0.0', port=5000)
+•	Starts the Flask development server.
+•	host='0.0.0.0' → Makes the app available on all network interfaces (important for Docker, otherwise it only runs inside the container).
+•	port=5000 → The app will run on port 5000
