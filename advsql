@@ -1,0 +1,38 @@
+   -- Create SalesRegion Table
+CREATE TABLE SalesRegion (
+    RegionID INT PRIMARY KEY,
+    RegionName VARCHAR(50),
+    Country VARCHAR(50)
+);
+
+-- Create Sales Table
+CREATE TABLE Sales (
+    SaleID INT PRIMARY KEY,
+    ProductName VARCHAR(50),
+    Quantity INT,
+    Amount DECIMAL(10,2),
+    RegionID INT,
+    SaleDate DATE,
+    FOREIGN KEY (RegionID) REFERENCES SalesRegion(RegionID)
+);
+
+-- Insert into SalesRegion
+INSERT INTO SalesRegion VALUES
+(1, 'North', 'India'),
+(2, 'South', 'India'),
+(3, 'East', 'India'),
+(4, 'West', 'India'),
+(5, 'Central', 'India');
+
+-- Insert into Sales
+INSERT INTO Sales VALUES
+(1001, 'Laptop', 5, 250000, 1, '2025-01-15'),
+(1002, 'Mobile', 10, 150000, 2, '2025-01-18'),
+(1003, 'Tablet', 8, 120000, 3, '2025-01-20'),
+(1004, 'Printer', 4, 40000, 4, '2025-01-25'),
+(1005, 'Monitor', 7, 70000, 5, '2025-02-01'),
+(1006, 'Laptop', 3, 150000, 1, '2025-02-05'),
+(1007, 'Mobile', 6, 90000, 2, '2025-02-07'),
+(1008, 'Tablet', 2, 30000, 3, '2025-02-10'),
+(1009, 'Monitor', 5, 50000, 4, '2025-02-15'),
+(1010, 'Laptop', 4, 200000, 5, '2025-02-18');
