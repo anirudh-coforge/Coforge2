@@ -36,3 +36,44 @@ INSERT INTO Sales VALUES
 (1008, 'Tablet', 2, 30000, 3, '2025-02-10'),
 (1009, 'Monitor', 5, 50000, 4, '2025-02-15'),
 (1010, 'Laptop', 4, 200000, 5, '2025-02-18');
+
+--------------------------------------------------------------------
+
+
+create database finalsql
+GO
+
+CREATE TABLE Department (
+    DeptID INT PRIMARY KEY,
+    DeptName VARCHAR(50)
+);
+
+CREATE TABLE Employees (
+    EmpID INT PRIMARY KEY,
+    EmpName VARCHAR(50),
+    DeptID INT,
+    Salary INT,
+    FOREIGN KEY (DeptID) REFERENCES Department(DeptID)
+);
+
+INSERT INTO Department VALUES
+(1, 'HR'),
+(2, 'IT'),
+(3, 'Finance');
+
+-- Insert Employees
+INSERT INTO Employees VALUES
+(101, 'Alice', 1, 50000),
+(102, 'Bob', 1, 60000),
+(103, 'Charlie', 2, 70000),
+(104, 'David', 2, 80000),
+(105, 'Eve', 2, 90000),
+(106, 'Frank', 3, 75000),
+(107, 'Grace', 3, 85000);
+
+Q1. Find employees who earn more than the average salary of all employees.
+Q2. Retrieve the names of employees who work in the same department as 'Alice'.
+Q3. Find the department(s) that have the maximum number of employees.
+Q4. List employees whose salary is greater than the salary of 'Bob'.
+Q5. Find the employees who earn the highest salary in their department.
+
