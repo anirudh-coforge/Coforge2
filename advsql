@@ -115,3 +115,21 @@ WHERE Salary = (
     FROM Employees
     WHERE DeptID = E.DeptID
 );
+
+Create the Employee Table
+CREATE TABLE Employees (
+    EmpID INT PRIMARY KEY,
+    EmpName VARCHAR(50),
+    ManagerID INT NULL
+);
+
+2. Insert Sample Data
+INSERT INTO Employees (EmpID, EmpName, ManagerID)
+VALUES
+(1, 'Alice', NULL),        -- Top-level Manager
+(2, 'Bob', 1),             -- Reports to Alice
+(3, 'Charlie', 1),         -- Reports to Alice
+(4, 'David', 2),           -- Reports to Bob
+(5, 'Eve', 2),             -- Reports to Bob
+(6, 'Frank', 3),           -- Reports to Charlie
+(7, 'Grace', 4);           -- Reports to David
