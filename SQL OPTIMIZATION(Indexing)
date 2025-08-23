@@ -1,0 +1,228 @@
+Records Grouping, Advantages, Searching, Sorting, Modifying Data
+
+•	Grouping: Aggregates data using GROUP BY for summaries.
+SELECT DeptID, AVG(Salary) AS AvgSalary
+FROM Employees
+GROUP BY DeptID;
+
+Advantage: Reduces large data into meaningful summaries like averages, counts, sums.
+•	Searching: Use efficient filtering with WHERE and indexed columns.
+•	SELECT EmpName FROM Employees WHERE DeptID = 2;
+•	Sorting: Done with ORDER BY, but avoid unnecessary sorts to improve performance.
+•	SELECT EmpName, Salary FROM Employees ORDER BY Salary DESC;
+•	Modifying: Updates/deletes must use indexed filters to avoid full scans.
+
+UPDATE Employees SET Salary = Salary * 1.1 WHERE DeptID = 1;
+A clustered index determines the physical order of data rows in a table, and a table can have only one clustered index because rows can be stored in only one order.
+
+Use of Indexes to Cover Queries
+A covering index contains all the columns required by a query, avoiding lookups.
+
+Example:
+CREATE NONCLUSTERED INDEX IX_Employees_DeptID_Salary
+ON Employees(DeptID, Salary)
+INCLUDE (EmpName);
+This index covers the query below, since all columns are included:
+SELECT EmpName, Salary FROM Employees WHERE DeptID = 2;
+ Faster because SQL doesn’t need to go back to the base table.
+ 
+Common Table Expressions (CTEs)
+CTEs simplify complex queries by creating a temporary result set.
+Example: Find employees with salary above their department’s average:
+WITH DeptAvg AS (
+    SELECT DeptID, AVG(Salary) AS AvgSalary
+    FROM Employees
+    GROUP BY DeptID
+)
+SELECT e.EmpName, e.Salary, e.DeptID
+FROM Employees e
+JOIN DeptAvg d ON e.DeptID = d.DeptID
+WHERE e.Salary > d.AvgSalary;
+Improves readability and maintains query performance.
+
+Index Guidelines
+1.	Use indexes on columns used in WHERE, JOIN, ORDER BY, GROUP BY.
+2.	Avoid over-indexing – each index adds overhead to INSERT/UPDATE/DELETE.
+3.	Use covering indexes for frequent queries.
+4.	Prefer narrow, selective columns for indexing.
+5.	Keep clustered indexes on primary keys or sequential columns.
+6.	Monitor index usage with execution plans.
+
+Setup a Sample Table with Data
+-- Create a sample table
+CREATE TABLE Sales (
+    SaleID INT IDENTITY(1,1) PRIMARY KEY,
+    CustomerName VARCHAR(100),
+    ProductName VARCHAR(100),
+    SaleAmount DECIMAL(10,2),
+    SaleDate DATE
+);
+
+-- Insert 100,000 sample rows
+INSERT INTO Sales (CustomerName, ProductName, SaleAmount, SaleDate)
+SELECT 
+    'Customer' + CAST(ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS VARCHAR),
+    'Product' + CAST((ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) % 50) AS VARCHAR),
+    RAND(CHECKSUM(NEWID())) * 1000,
+    DATEADD(DAY, -ABS(CHECKSUM(NEWID()) % 365), GETDATE())
+FROM sys.all_objects a
+CROSS JOIN sys.all_objects b;
+= This will create ~100,000 rows for testing.
+=
+
+2. Query Without Index
+-- Query for product-based search
+SET STATISTICS IO ON;
+SET STATISTICS TIME ON;
+
+SELECT * 
+FROM Sales
+WHERE ProductName = 'Product25';
+ Execution plan here will show a Table Scan, meaning SQL Server checks every row.
+
+3. Create an Index
+-- Create a non-clustered index on ProductName
+CREATE NONCLUSTERED INDEX IX_Sales_ProductName
+ON Sales(ProductName);
+
+4. Query With Index
+-- Same query again
+SELECT * 
+FROM Sales
+WHERE ProductName = 'Product25';
+ Execution plan now should show an Index Seek (much faster).
+•	I/O reads drop drastically.
+•	Execution time reduces.
+
+5. Compare Execution Plans
+•	Without Index → Table Scan (expensive, full read).
+•	With Index → Index Seek (direct lookup, efficient).
+•	SQL Server Management Studio (SSMS) → Enable "Include Actual Execution Plan" (Ctrl+M) before running the query to visually compare.
+
+
+•	Before index: SQL scans all rows.
+•	After index: SQL seeks directly using the index → faster performance.
+
+1. Drop the Index
+DROP INDEX IX_Sales_ProductName ON Sales;
+2. Recreate the Index
+CREATE NONCLUSTERED INDEX IX_Sales_ProductName
+ON Sales(ProductName);
+ 
+Things to remember:
+•	Dropping the index will temporarily remove its performance benefits for queries using it.
+•	If any query hints or dependencies explicitly reference this index name, they will fail until you recreate it.
+•	Recreating the index can also help if you want to rebuild or reorganize it for fragmentation issues.
+Clustered Index
+•	A clustered index determines the physical order of rows in the table (data is stored in the index order).
+•	Think of it like a phone book arranged alphabetically by last name. The data itself is sorted in that order.
+•	A table can have only one clustered index (because data rows can’t be physically stored in two different orders).
+•	By default, when you create a Primary Key, SQL Server creates a clustered index on it (unless you specify otherwise).
+
+Example:
+CREATE CLUSTERED INDEX IX_Employees_EmpID
+ON Employees(EmpID);
+Now the Employees table rows are stored physically ordered by EmpID.
+
+Non-Clustered Index
+•	A non-clustered index does not change the physical order of the data.
+•	Instead, it creates a separate index structure (like an extra lookup table) that stores the key values and a pointer (row locator) to the actual data row.
+•	A table can have many non-clustered indexes (up to 999 in SQL Server).
+•	Think of it like the index section at the back of a book: it lists keywords and points you to the right page.
+
+Example:
+CREATE NONCLUSTERED INDEX IX_Sales_ProductName
+ON Sales(ProductName);
+
+Now, SQL Server maintains a separate lookup structure for quick searches on ProductName, but actual data order in Sales is unchanged.
+
+Key Differences
+Feature	Clustered Index	Non-Clustered Index
+Data Storage	Rows stored in index order	Separate index with row locator
+Number Allowed	1 per table	Up to 999 per table
+Speed	Faster for range queries & sorting	Faster for point lookups
+Physical Order	Data physically reordered	Data order unchanged
+Default	Created by Primary Key (unless specified)	Must be created explicitly
+
+
+SQL Optimization with Sales Table
+________________________________________
+Records Grouping, Advantages, Searching, Sorting, Modifying Data
+Grouping
+-- Group sales by Product and get total amount
+SELECT ProductName, SUM(SaleAmount) AS TotalSales
+FROM Sales
+GROUP BY ProductName
+ORDER BY TotalSales DESC;
+ Advantage: Helps in aggregation and reporting (e.g., sales by product).
+
+Searching
+-- Find all sales for Customer500
+SELECT *
+FROM Sales
+WHERE CustomerName = 'Customer500';
+ Without index, SQL Server scans the table. With an index, it seeks directly.
+
+Sorting
+-- Sort by highest SaleAmount
+SELECT *
+FROM Sales
+ORDER BY SaleAmount DESC;
+ Sorting is expensive on large datasets. Proper indexes reduce sort cost.
+
+Modifying Data
+-- Update SaleAmount for a customer
+UPDATE Sales
+SET SaleAmount = SaleAmount * 1.10
+WHERE CustomerName = 'Customer500';
+ Updates should target specific rows with indexed columns to avoid table scans.
+
+Indexes, Clustered Index Creation
+Clustered Index
+By default, SaleID (PK) is clustered. Let’s add non-clustered indexes:
+-- Create non-clustered index on CustomerName
+CREATE NONCLUSTERED INDEX IX_Sales_CustomerName
+ON Sales (CustomerName);
+
+-- Create non-clustered index on ProductName + SaleDate
+CREATE NONCLUSTERED INDEX IX_Sales_ProductDate
+ON Sales (ProductName, SaleDate);
+
+Use of Indexes to Cover Queries
+A covering index means all columns needed by a query are in the index, no lookup to table needed.
+-- Create covering index with included column
+CREATE NONCLUSTERED INDEX IX_Sales_Covering
+ON Sales (CustomerName)
+INCLUDE (SaleAmount, SaleDate);
+
+-- Query that is fully covered by index
+SELECT CustomerName, SaleAmount, SaleDate
+FROM Sales
+WHERE CustomerName = 'Customer1000';
+ Now SQL Server doesn’t touch base table → much faster.
+
+
+Checking Index Creation and IO Difference
+
+Check when index created
+-- See index details
+SELECT name, type_desc, create_date
+FROM sys.indexes i
+JOIN sys.objects o ON i.object_id = o.object_id
+WHERE o.name = 'Sales';
+
+Compare IO cost
+Enable I/O statistics:
+
+SET STATISTICS IO ON;
+SET STATISTICS TIME ON;
+
+-- Run without index
+SELECT * FROM Sales WHERE CustomerName = 'Customer99999';
+
+-- Run again after index creation
+SELECT * FROM Sales WHERE CustomerName = 'Customer99999';
+
+SET STATISTICS IO OFF;
+SET STATISTICS TIME OFF;
+ You’ll see logical reads drop drastically after using an index.
