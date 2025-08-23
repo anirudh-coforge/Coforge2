@@ -133,3 +133,792 @@ VALUES
 (5, 'Eve', 2),             -- Reports to Bob
 (6, 'Frank', 3),           -- Reports to Charlie
 (7, 'Grace', 4);           -- Reports to David
+
+
+-------------------------------------------------------------
+
+Employee – Manager hierarchy example.
+
+1. Create the Employee Table
+CREATE TABLE Employees (
+    EmpID INT PRIMARY KEY,
+    EmpName VARCHAR(50),
+    ManagerID INT NULL
+);
+
+2. Insert Sample Data
+INSERT INTO Employees (EmpID, EmpName, ManagerID)
+VALUES
+(1, 'Alice', NULL),        -- Top-level Manager
+(2, 'Bob', 1),             -- Reports to Alice
+(3, 'Charlie', 1),         -- Reports to Alice
+(4, 'David', 2),           -- Reports to Bob
+(5, 'Eve', 2),             -- Reports to Bob
+(6, 'Frank', 3),           -- Reports to Charlie
+(7, 'Grace', 4);           -- Reports to David
+So the hierarchy looks like:
+Alice
+ ├── Bob
+ │        ├── David
+ │        │             └── Grace
+ │        └── Eve
+ └── Charlie
+      └── Frank
+
+3. Simple CTE Example
+ Find all employees who directly report to Bob (ManagerID = 2).
+WITH DirectReports AS (
+    SELECT EmpID, EmpName
+    FROM Employees
+    WHERE ManagerID = 2
+)
+SELECT * FROM DirectReports;
+Output:
+EmpID | EmpName
+----------------
+4     | David
+5     | Eve
+First CTE – DirectReports
+WITH DirectReports AS (
+    SELECT EmpID, EmpName
+    FROM Employees
+    WHERE ManagerID = 2
+)
+SELECT dr.EmpName AS Employee, e.EmpName AS Manager
+FROM DirectReports dr
+JOIN Employees e ON e.EmpID = 2;
+•	DirectReports CTE picks all employees who directly report to Bob (EmpID = 2).
+That gives us:
+EmpID	EmpName
+4	David
+5	Eve
+•	Final SELECT joins them back with Bob 
+
+
+--Same Logic with Subquery
+SELECT EmpID, EmpName
+FROM Employees
+WHERE ManagerID = (
+    SELECT EmpID FROM Employees WHERE EmpName = 'Bob'
+);
+ Same result as the CTE, but using a nested subquery.
+
+-- Use CTE in a Join
+ 
+-- Shows Employee → Manager mapping for Bob’s team.
+--Use CTE in an Aggregate
+WITH DirectReports AS (
+    SELECT EmpID, EmpName
+    FROM Employees
+    WHERE ManagerID = 2
+)
+SELECT COUNT(*) AS NumOfReports
+FROM DirectReports;
+ --Counts how many people report directly to Bob.
+
+
+
+
+
+
+-- Recursive CTE (Hierarchy Example)
+WITH EmployeeHierarchy AS (
+    SELECT EmpID, EmpName, ManagerID
+    FROM Employees
+    WHERE EmpID = 2   -- Start from Bob
+
+    UNION ALL
+
+    SELECT e.EmpID, e.EmpName, e.ManagerID
+    FROM Employees e
+    INNER JOIN EmployeeHierarchy eh ON e.ManagerID = eh.EmpID
+)
+SELECT * FROM EmployeeHierarchy;
+-- Finds all levels under Bob (David, Eve, Grace).
+Step-by-Step Execution
+Iteration 1 (Anchor Member)
+Pick Bob (EmpID=2) as the starting employee.
+EmpID | EmpName | ManagerID
+2     | Bob     | 1
+
+Iteration 2 (First Recursive Join)
+Find employees whose ManagerID = 2 (Bob is their manager).
+EmpID | EmpName | ManagerID
+4     | David   | 2
+5     | Eve     | 2
+Now hierarchy table so far:
+2 | Bob   | 1
+4 | David | 2
+5 | Eve   | 2
+
+Iteration 3 (Second Recursive Join)
+Now check employees whose ManagerID is in [4, 5]:
+•	David (4) is a manager of Grace (7).
+•	Eve (5) manages no one.
+So we add:
+EmpID | EmpName | ManagerID
+7     | Grace   | 4
+Now hierarchy table so far:
+2 | Bob   | 1
+4 | David | 2
+5 | Eve   | 2
+7 | Grace | 4
+________________________________________
+Iteration 4 (Third Recursive Join)
+Now check employees whose ManagerID = 7.
+But Grace manages no one, so recursion stops here.
+________________________________________
+ Final Output
+The query returns:
+EmpID | EmpName | ManagerID
+2     | Bob     | 1
+4     | David   | 2
+5     | Eve     | 2
+7     | Grace   | 4
+ Which means: Starting from Bob, we can see all his subordinates at every level: David, Eve, and Grace.
+
+--Comparison:
+•	CTE is reusable within the query, improves readability, and supports recursion.
+•	Subquery works fine for simple cases but is harder to reuse or extend.
+
+-- Recursive CTE Example (Real-time use case)
+ --Find all levels of employees under Bob (hierarchical reporting).
+WITH EmployeeHierarchy AS (
+    SELECT EmpID, EmpName, ManagerID, 0 AS Level
+    FROM Employees
+    WHERE EmpName = 'Bob'
+    UNION ALL
+    -- Recursive member: get subordinates
+    SELECT e.EmpID, e.EmpName, e.ManagerID, eh.Level + 1
+    FROM Employees e
+    INNER JOIN EmployeeHierarchy eh
+        ON e.ManagerID = eh.EmpID
+) SELECT * FROM EmployeeHierarchy;
+
+Real-time Use Case of Recursive CTEs:
+•	Organization hierarchies (Managers → Employees).
+•	Bill of Materials (Parent → Child parts).
+•	Folder/Directory structure navigation.
+•	Tracking dependencies (e.g., tasks, workflows).
+
+
+What is a Temporary Table?
+•	A Temporary Table in SQL Server is a table that exists temporarily during a session or query execution.
+•	It is stored in the tempdb system database.
+•	It is automatically dropped when the session ends (or explicitly dropped by the user).
+
+ Types of Temporary Tables
+1.	Local Temporary Table (#TableName)
+o	Visible only to the session (connection) that created it.
+o	Dropped automatically when the session closes.
+2.	Global Temporary Table (##TableName)
+o	Visible to all sessions.
+o	Dropped when the last session using it is closed.
+
+ Syntax & Examples
+ Create a Local Temp Table
+CREATE TABLE #TempEmployees (
+    EmpID INT,
+    EmpName VARCHAR(50),
+    Salary DECIMAL(10,2),
+    DeptID INT
+);
+
+-- Insert sample data
+INSERT INTO #TempEmployees VALUES (1, 'John', 50000, 101);
+INSERT INTO #TempEmployees VALUES (2, 'Mary', 60000, 102);
+
+-- Select from Temp Table
+SELECT * FROM #TempEmployees;
+
+-- Drop Temp Table explicitly (optional)
+DROP TABLE #TempEmployees;
+
+ Create and Populate Temp Table from Existing Table
+SELECT EmpID, EmpName, Salary, DeptID
+INTO #HighSalaryEmployees
+FROM Employees
+WHERE Salary > 60000;
+
+SELECT * FROM #HighSalaryEmployees;
+
+ Create a Global Temp Table
+CREATE TABLE ##AllEmployees (
+    EmpID INT,
+    EmpName VARCHAR(50),
+    Salary DECIMAL(10,2)
+);
+
+INSERT INTO ##AllEmployees VALUES (1, 'Alex', 70000);
+SELECT * FROM ##AllEmployees;
+
+ Key Points:
+•	Local temp tables start with #
+•	Global temp tables start with ##
+•	They are stored in tempdb database internally
+•	Used for intermediate storage, transformations, or breaking down complex queries
+
+1. Breaking Down Complex Queries
+•	When a query involves multiple joins and aggregations, you can store intermediate results in a temp table.
+•	Example:
+SELECT DeptID, AVG(Salary) AS AvgSalary
+INTO #DeptAvg
+FROM Employees
+GROUP BY DeptID;
+•	
+SELECT E.EmpName, E.Salary, D.AvgSalary
+FROM Employees E
+JOIN #DeptAvg D ON E.DeptID = D.DeptID;
+ This improves readability and makes debugging easier.
+
+ 2. Storing Intermediate Results for Reuse
+•	If you need the same aggregated/filtered dataset multiple times in a stored procedure, you can save it once in a temp table and reuse it instead of recalculating every time.
+
+ 3. Handling Large Data for Reporting
+•	Reports often need data from multiple queries. Instead of running heavy subqueries repeatedly, store intermediate results in a temp table and then join/filter further.
+•	Example: Monthly Sales → put in temp table → generate multiple reports.
+
+ 4. Simplifying Data Transformations in ETL
+•	In ETL pipelines, temporary tables are used to clean and stage data before inserting into final tables.
+•	Example: Load raw sales data → transform in temp table → insert into fact_sales table.
+________________________________________
+ 5. Avoiding Locks on Production Tables
+•	When running analysis or doing batch updates, using temp tables prevents putting locks on main tables, reducing performance issues in live systems.
+Temp Tables vs Table Variables in SQL Server
+Temporary Tables (#Temp)
+•	Created using CREATE TABLE #Temp or SELECT ... INTO #Temp.
+•	Stored in tempdb system database.
+•	Support indexes (clustered & non-clustered).
+•	Can have constraints (Primary Key, Foreign Key, etc.).
+•	Allow statistics, so SQL Server optimizer can generate better execution plans.
+•	Good for handling large datasets and complex joins.
+•	Scope: Session-specific (drops automatically when session ends).
+________________________________________
+Table Variables (DECLARE @TableVar)
+•	Declared like: DECLARE @TableVar TABLE (ID INT, Name VARCHAR(50)).
+•	Also stored in tempdb, but managed differently.
+•	Limited index support: only Primary Key & Unique constraints (no non-clustered indexes).
+•	Do not maintain statistics, so SQL Server may use less optimal execution plans.
+•	Best for small datasets (usually < 100 rows).
+•	Scope: Batch-specific (exists only within the script, stored procedure, or function).
+Table Variables in SQL Server
+•	A Table Variable is a variable that stores a result set, similar to a temporary table, but scoped only to the batch, procedure, or function where it is declared.
+•	Defined using the DECLARE keyword.
+•	They are stored in memory (but can spill to tempdb if large).
+•	Useful for smaller datasets and when you need them only within a limited scope.
+
+ 
+Syntax
+DECLARE @TableVar TABLE (
+    EmpID INT,
+    EmpName VARCHAR(100),
+    Salary DECIMAL(10,2),
+    DeptID INT
+);
+
+Example: Using a Table Variable
+-- Declare a table variable
+DECLARE @HighSalaryEmployees TABLE (
+    EmpID INT,
+    EmpName VARCHAR(100),
+    Salary DECIMAL(10,2),
+    DeptID INT
+);
+
+-- Insert data into table variable
+INSERT INTO @HighSalaryEmployees
+SELECT EmpID, EmpName, Salary, DeptID
+FROM Employees
+WHERE Salary > 50000;
+
+-- Select from table variable
+SELECT * FROM @HighSalaryEmployees;
+ Explanation
+1.	We declared @HighSalaryEmployees table variable.
+2.	Inserted employees with Salary > 50000.
+3.	Queried it like a normal table, but its scope ends with the batch/procedure.
+
+Difference: Table Variable vs Temporary Table
+Feature	Temporary Table (#TempTable)	Table Variable (@TableVar)
+Declaration	CREATE TABLE #Temp...	DECLARE @TableVar TABLE(...)
+Scope	Session/connection	Batch, procedure, or function
+Transactions	Can be rolled back in transactions	Not affected by rollback
+Indexes	Can create explicit indexes	Only primary key/unique constraints
+Performance	Better for large datasets	Better for small dataset
+
+
+Rule of Thumb:
+•	Use Table Variable for small, lightweight, intermediate datasets.
+•	Use Temp Table when working with larger datasets, requiring indexing, statistics, or complex joins.
+Operators that work with subqueries
+•	Comparison operators: =, >, <, >=, <=, <>
+•	IN / NOT IN – check membership in subquery result.
+•	EXISTS / NOT EXISTS – check if subquery returns rows.
+•	ANY / SOME – compare to any value returned by subquery.
+•	ALL – compare to all values returned by subquery.
+Example:
+-- SELECT with IN
+SELECT EmpName, Salary 
+FROM Employees
+WHERE DeptID IN (SELECT DeptID FROM Department WHERE Location = 'NY');
+
+-- UPDATE with subquery
+UPDATE Employees
+SET Salary = Salary * 1.1
+WHERE DeptID = (SELECT DeptID FROM Department WHERE DeptName = 'Finance');
+
+Sample Tables
+CREATE TABLE Department (
+    DeptID INT PRIMARY KEY,
+    DeptName VARCHAR(50)
+);
+
+CREATE TABLE Employee (
+    EmpID INT PRIMARY KEY,
+    EmpName VARCHAR(50),
+    DeptID INT,
+    Salary DECIMAL(10,2),
+    FOREIGN KEY (DeptID) REFERENCES Department(DeptID)
+);
+
+-- Sample data
+INSERT INTO Department VALUES (1, 'HR'), (2, 'Finance'), (3, 'IT');
+
+INSERT INTO Employee VALUES
+(101, 'Alice', 1, 50000),
+(102, 'Bob', 2, 60000),
+(103, 'Charlie', 3, 70000),
+(104, 'David', 2, 40000),
+(105, 'Eve', 3, 55000);
+
+EXISTS
+Returns rows if the subquery returns at least one row.
+SELECT DeptName
+FROM Department d
+WHERE EXISTS (SELECT 1 
+              FROM Employee e 
+              WHERE e.DeptID = d.DeptID);
+ Lists only departments that have employees.
+
+NOT EXISTS
+ Returns rows if the subquery returns no rows.
+SELECT DeptName
+FROM Department d
+WHERE NOT EXISTS (SELECT 1 
+                  FROM Employee e 
+                  WHERE e.DeptID = d.DeptID);
+ Lists departments that have no employees.
+
+ANY (or SOME)
+Compares a value with any row from subquery result.
+SELECT EmpName, Salary
+FROM Employee
+WHERE Salary > ANY (SELECT Salary FROM Employee WHERE DeptID = 2);
+Returns employees whose salary is greater than any one salary in Finance department (i.e., greater than the lowest salary in Finance).
+
+ ALL
+ Compares a value with all rows from subquery result.
+SELECT EmpName, Salary
+FROM Employee
+WHERE Salary > ALL (SELECT Salary FROM Employee WHERE DeptID = 2);
+Returns employees whose salary is greater than all salaries in Finance department (i.e., greater than the highest salary in Finance).
+
+With Real-time Example
+--------------------------------------------
+-- STEP 1: Create Tables (E-commerce Example)
+--------------------------------------------
+CREATE TABLE Customers (
+    CustomerID INT PRIMARY KEY,
+    CustomerName VARCHAR(100),
+    City VARCHAR(50)
+);
+
+CREATE TABLE Orders (
+    OrderID INT PRIMARY KEY,
+    CustomerID INT FOREIGN KEY REFERENCES Customers(CustomerID),
+    OrderDate DATE,
+    Amount DECIMAL(10,2),
+    ProductCategory VARCHAR(50)
+);
+
+--------------------------------------------
+-- STEP 2: Insert Sample Data
+--------------------------------------------
+INSERT INTO Customers VALUES
+(1, 'Alice', 'Delhi'),
+(2, 'Bob', 'Mumbai'),
+(3, 'Charlie', 'Delhi'),
+(4, 'David', 'Bangalore');
+
+INSERT INTO Orders VALUES
+(101, 1, '2023-01-15', 5000, 'Electronics'),
+(102, 2, '2023-02-10', 1500, 'Books'),
+(103, 1, '2023-03-05', 2000, 'Clothing'),
+(104, 3, '2023-03-18', 2500, 'Electronics'),
+(105, 2, '2023-04-22', 3000, 'Clothing'),
+(106, 4, '2023-05-10', 4500, 'Electronics'),
+(107, 3, '2023-05-15', 800,  'Books');
+
+--------------------------------------------
+Correlated Subquery
+-- Find customers who placed orders greater than their own average spend
+--------------------------------------------
+SELECT c.CustomerID, c.CustomerName, o.OrderID, o.Amount
+FROM Customers c
+JOIN Orders o ON c.CustomerID = o.CustomerID
+WHERE o.Amount > (
+    SELECT AVG(o2.Amount)
+    FROM Orders o2
+    WHERE o2.CustomerID = c.CustomerID
+);
+
+Real-time Use: Identify high-value orders compared to customer’s own history
+
+--------------------------------------------
+EXISTS with Correlated Subquery
+-- Find customers who have purchased Electronics
+--------------------------------------------
+SELECT CustomerID, CustomerName
+FROM Customers c
+WHERE EXISTS (
+    SELECT 1
+    FROM Orders o
+    WHERE o.CustomerID = c.CustomerID
+      AND o.ProductCategory = 'Electronics'
+);
+
+Real-time Use: Target customers who bought electronics for marketing
+
+--------------------------------------------
+UNION Query
+-- Get list of all cities from both Customers and Orders (remove duplicates)
+--------------------------------------------
+SELECT City FROM Customers
+UNION
+SELECT DISTINCT 'Online' AS City FROM Orders;
+
+Real-time Use: Combining locations from multiple sources
+
+--------------------------------------------
+GROUPING SETS
+-- Show sales total by City and ProductCategory
+--------------------------------------------
+SELECT c.City, o.ProductCategory, SUM(o.Amount) AS TotalSales
+FROM Customers c
+JOIN Orders o ON c.CustomerID = o.CustomerID
+GROUP BY GROUPING SETS (
+    (c.City),
+    (o.ProductCategory),
+    (c.City, o.ProductCategory)
+);
+Real-time Use: Multiple grouping levels in one query for reporting
+
+--------------------------------------------
+ROLLUP
+-- Show sales total by City → Category → Grand Total
+--------------------------------------------
+SELECT c.City, o.ProductCategory, SUM(o.Amount) AS TotalSales
+FROM Customers c
+JOIN Orders o ON c.CustomerID = o.CustomerID
+GROUP BY ROLLUP (c.City, o.ProductCategory);
+
+Real-time Use: Generate subtotals and grand totals in financial reports
+
+--------------------------------------------
+CUBE
+-- Show all combinations of City and Category totals
+--------------------------------------------
+SELECT c.City, o.ProductCategory, SUM(o.Amount) AS TotalSales
+FROM Customers c
+JOIN Orders o ON c.CustomerID = o.CustomerID
+GROUP BY CUBE (c.City, o.ProductCategory);
+
+Real-time Use: Compare sales across all dimensions (City & Category)
+
+--------------------------------------------
+Partial CUBE
+-- Only generate grouping for ProductCategory
+--------------------------------------------
+SELECT c.City, o.ProductCategory, SUM(o.Amount) AS TotalSales
+FROM Customers c
+JOIN Orders o ON c.CustomerID = o.CustomerID
+GROUP BY GROUPING SETS (
+    (c.City, o.ProductCategory),
+    (o.ProductCategory)
+);
+Real-time Use: Focus only on product performance while still keeping city detail
+
+1. ROLLUP
+•	Definition: ROLLUP generates subtotals in a hierarchical order (from left to right in the column list).
+•	It is useful for drill-down analysis where you want to see subtotals at each level of a hierarchy.
+•	Fewer combinations compared to CUBE.
+ Example (E-commerce):
+We want sales totals by City and ProductCategory in hierarchy.
+SELECT c.City, o.ProductCategory, SUM(o.Amount) AS TotalSales
+FROM Orders o
+JOIN Customers c ON o.CustomerID = c.CustomerID
+GROUP BY ROLLUP (c.City, o.ProductCategory);
+Result (simplified):
+City       | ProductCategory | TotalSales
+-----------|----------------       -|------------
+Bangalore  | Electronics       | 4500
+Bangalore  | NULL                 | 4500  -- subtotal for Bangalore
+Delhi          | Clothing             | 2000
+Delhi         | Electronics        | 2500
+Delhi         | Books                | 800
+Delhi        | NULL                  | 5300  -- subtotal for Delhi
+Mumbai  | Clothing            | 3000
+Mumbai  | Books                | 1500
+Mumbai  | NULL              | 4500  -- subtotal for Mumbai
+NULL       | NULL                  | 14300 -- grand total
+ROLLUP follows hierarchy: City → Category → Subtotal → Grand Total.
+
+ 2. Partial CUBE
+•	Definition: CUBE generates all possible combinations of grouping columns.
+•	A Partial CUBE restricts this by choosing specific subsets of columns.
+•	It is broader than ROLLUP but narrower than full CUBE.
+Example (E-commerce):
+We want totals by City, by Category, and overall, but not every possible combination.
+SELECT c.City, o.ProductCategory, SUM(o.Amount) AS TotalSales
+FROM Orders o
+JOIN Customers c ON o.CustomerID = c.CustomerID
+GROUP BY CUBE (c.City, o.ProductCategory);
+Result (simplified):
+City       | ProductCategory | TotalSales
+-----------     |-----------------   |------------
+Bangalore  | Electronics     | 4500
+Bangalore  | NULL              | 4500
+Delhi          | Clothing        | 2000
+Delhi         | Electronics     | 2500
+Delhi        | Books             | 800
+Delhi       | NULL               | 5300
+Mumbai | Clothing        | 3000
+Mumbai     | Books           | 1500
+Mumbai     | NULL            | 4500
+NULL       | Electronics     | 7000
+NULL       | Clothing        | 5000
+NULL       | Books           | 2300
+NULL       | NULL            | 14300
+Notice extra rows like NULL | Electronics, NULL | Clothing etc. → totals per ProductCategory across all cities.
+This is not available in ROLLUP.
+
+ Key Difference
+Feature	ROLLUP	Partial CUBE
+Hierarchy	Yes (top → bottom order)	No hierarchy, all chosen combos included
+Combinations	Subtotals at each hierarchy level	Subtotals for each combination of columns
+Use Case	Drill-down (Year → Quarter → Month)	Cross-analysis (City vs Category vs Total)
+Output Size	Smaller	Larger than ROLLUP, smaller than full CUBE
+________________________________________
+ Real-time analogy:
+•	ROLLUP = like asking: “Show me sales in City → then Category totals under each City → then overall totals.”
+•	Partial CUBE = like asking: “Show me sales by City, by Category, and overall — independently, not just in a hierarchy.”
+Example 1: Trigger to Prevent High Order Amounts
+Suppose we want to prevent inserting an Order where the Amount > 10,000.
+-- Trigger to restrict high-value orders
+CREATE TRIGGER trg_CheckOrderAmount
+ON Orders
+FOR INSERT
+AS
+BEGIN
+    IF EXISTS (SELECT 1 FROM inserted WHERE Amount > 10000)
+    BEGIN
+        RAISERROR ('Order amount cannot exceed 10,000!', 16, 1);
+        ROLLBACK TRANSACTION;
+    END
+END;
+ If someone tries to insert:
+INSERT INTO Orders VALUES (108, 1, '2023-06-01', 15000, 'Electronics');
+ It will fail with the error:
+Order amount cannot exceed 10,000!
+
+Example 2: Trigger to Log Orders in an Audit Table
+We create an Audit table to track all inserted orders.
+-- Audit table
+CREATE TABLE Orders_Audit (
+    AuditID INT IDENTITY(1,1) PRIMARY KEY,
+    OrderID INT,
+    CustomerID INT,
+    Amount DECIMAL(10,2),
+    ActionDate DATETIME DEFAULT GETDATE()
+);
+
+-- Trigger to log new orders
+CREATE TRIGGER trg_AuditOrders
+ON Orders
+AFTER INSERT
+AS
+BEGIN
+    INSERT INTO Orders_Audit (OrderID, CustomerID, Amount)
+    SELECT OrderID, CustomerID, Amount
+    FROM inserted;
+END;
+ Now if you insert:
+INSERT INTO Orders VALUES (108, 1, '2023-06-05', 2500, 'Clothing');
+
+Explanation (Real-time Flow)
+1.	Correlated Subquery → Identifies high-value orders by comparing with customer’s own average.
+2.	EXISTS with Correlated Subquery → Finds customers who purchased Electronics (marketing use case).
+3.	UNION → Combines customer cities and "Online" orders in one dataset.
+4.	Grouping Sets → Multiple aggregations (by city, by category, both) in one query.
+5.	ROLLUP → Creates subtotals (city → category) and overall grand total.
+6.	CUBE → Generates all possible aggregations (city total, category total, both, and grand total).
+7.	Partial CUBE → Focused analysis (e.g., product performance across cities).
+Subquery Practice Questions
+1.	Find the region name where the highest single sale amount occurred.
+2.	List products sold in the same region as 'Tablet'.
+
+
+Subquery Practice
+1. Region name where the highest single sale amount occurred
+SELECT RegionName
+FROM SalesRegion
+WHERE RegionID = (
+    SELECT RegionID 
+    FROM Sales 
+    WHERE Amount = (SELECT MAX(Amount) FROM Sales)
+);
+Result:
+RegionName
+----------
+West
+
+CTE Version:
+WITH MaxSale AS (
+    SELECT RegionID, Amount
+    FROM Sales
+    WHERE Amount = (SELECT MAX(Amount) FROM Sales)
+)
+SELECT sr.RegionName
+FROM SalesRegion sr
+JOIN MaxSale ms ON sr.RegionID = ms.RegionID;
+
+ Explanation:
+1.	MaxSale CTE: Finds the row(s) from Sales that has the maximum Amount.
+2.	Main query: Joins SalesRegion with the result of MaxSale to get the RegionName corresponding to the maximum sale.
+
+
+2. Products sold in the same region as 'Tablet'
+SELECT DISTINCT ProductName
+FROM Sales
+WHERE RegionID IN (
+    SELECT RegionID 
+    FROM Sales 
+    WHERE ProductName = 'Tablet'
+);Result:
+Product
+-------
+Tablet
+
+3. Sales with amounts greater than average sale amount
+SELECT SaleID, ProductName, Amount
+FROM Sales
+WHERE Amount > (SELECT AVG(Amount) FROM Sales);
+Result:
+SaleID | ProductName | Amount
+-------+---------+-------
+1      | Laptop  | 1200
+4      | Laptop  | 1500
+6      | Laptop  | 1100
+
+
+ Q1: Find the region where the highest sales amount happened
+SELECT RegionName
+FROM SalesRegion
+WHERE RegionID = (
+    SELECT RegionID
+    FROM Sales
+    WHERE Amount = (SELECT MAX(Amount) FROM Sales)
+);
+Explanation: Finds the region corresponding to the max Amount.
+•	MAX(Amount) = 250000 → RegionID = 1 → "North"
+Output
+RegionName
+North
+
+ Q2: Find all product(s) sold in the same region(s) where Laptop was sold
+SELECT DISTINCT ProductName
+FROM Sales
+WHERE RegionID IN (
+    SELECT DISTINCT RegionID
+    FROM Sales
+    WHERE ProductName = 'Laptop'
+);
+•	Laptop sold in RegionID = 1 (North) & 5 (Central).
+•	Products in those regions → Laptop, Monitor.
+Output
+ProductName
+Laptop
+Monitor
+________________________________________
+ Q3: Find region(s) where Tablet was sold
+SELECT RegionName
+FROM SalesRegion
+WHERE RegionID IN (
+    SELECT DISTINCT RegionID
+    FROM Sales
+    WHERE ProductName = 'Tablet'
+);
+•	Tablet appears in RegionID = 3 → East.
+Output
+RegionName
+East
+________________________________________
+Q4: Find product(s) that had quantity greater than the average quantity sold
+SELECT DISTINCT ProductName
+FROM Sales
+WHERE Quantity > (
+    SELECT AVG(Quantity) FROM Sales
+);
+•	Quantities = 5,10,8,4,7,3,6,2,5,4 → AVG = 5.4
+•	Quantities > 5.4 → 10 (Mobile), 8 (Tablet), 7 (Monitor), 6 (Mobile).
+Output
+ProductName
+Mobile
+Tablet
+Monitor
+________________________________________
+Q5: Find the region(s) where total sales amount is greater than the average total sales across regions
+SELECT RegionName
+FROM SalesRegion
+WHERE RegionID IN (
+    SELECT RegionID
+    FROM Sales
+    GROUP BY RegionID
+    HAVING SUM(Amount) > (
+        SELECT AVG(TotalAmount)
+        FROM (
+            SELECT SUM(Amount) AS TotalAmount
+            FROM Sales
+            GROUP BY RegionID
+        ) AS RegionTotals
+    )
+);
+•	Region totals:
+o	North (1) → 400000
+o	South (2) → 240000
+o	East (3) → 150000
+o	West (4) → 90000
+o	Central (5) → 270000
+•	Average total = (400000+240000+150000+90000+270000)/5 = 230000
+•	Regions > 230000 → North, South, Central
+ Output
+RegionName
+North
+South
+Central
+________________________________________
+ Q6: Find products sold on the earliest sale date
+SELECT ProductName
+FROM Sales
+WHERE SaleDate = (
+    SELECT MIN(SaleDate) FROM Sales
+);
+•	Earliest SaleDate = 2025-01-15 → Product = Laptop
+ Output
+ProductName
+Laptop
+
+
+
+
+
