@@ -53,6 +53,25 @@ ORDER BY
   s.ProductName;
   GO
 
+  SELECT
+  CASE 
+    WHEN GROUPING(r.RegionName) = 1 THEN 'ALL REGIONS'
+    ELSE r.RegionName
+  END AS RegionName,
+
+  CASE 
+    WHEN GROUPING(s.ProductName) = 1 THEN 'ALL PRODUCTS'
+    ELSE s.ProductName
+  END AS ProductName,
+
+  SUM(s.Quantity) AS TotalQty,
+  SUM(s.Amount)   AS TotalAmount,
+  GROUPING(r.RegionName)  AS G_Region,
+  GROUPING(s.ProductName) AS G_Product
+FROM Sales s
+JOIN SalesRegion r ON r.RegionID = s.RegionID
+GROUP BY ROLLUP (r.RegionName, s.ProductName);
+
 --------------------------------------------------------------------
 
 
