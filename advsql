@@ -37,6 +37,22 @@ INSERT INTO Sales VALUES
 (1009, 'Monitor', 5, 50000, 4, '2025-02-15'),
 (1010, 'Laptop', 4, 200000, 5, '2025-02-18');
 
+SELECT
+  r.RegionName,
+  s.ProductName,
+  SUM(s.Quantity) AS TotalQty,
+  SUM(s.Amount)   AS TotalAmount,
+  GROUPING(r.RegionName)  AS G_Region,
+  GROUPING(s.ProductName) AS G_Product
+FROM Sales s
+JOIN SalesRegion r ON r.RegionID = s.RegionID
+GROUP BY ROLLUP (r.RegionName, s.ProductName)
+ORDER BY
+  CASE WHEN r.RegionName IS NULL THEN 1 ELSE 0 END,
+  r.RegionName,
+  s.ProductName;
+  GO
+
 --------------------------------------------------------------------
 
 
