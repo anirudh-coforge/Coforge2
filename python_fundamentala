@@ -1,0 +1,233 @@
+Basic Syntax & Data Types
+emp_id = 101
+emp_name = "Alice"
+is_active = True
+salary = 55000.75
+print(emp_id, type(emp_id))
+print(emp_name, type(emp_name))
+print(is_active, type(is_active))
+print(salary, type(salary))
+emp_id = 103
+emp_name = "Aly"
+print("Employee ID:", emp_id)
+print("Employee Name:", emp_name)
+
+# --- Numbers ---
+salary = 55000.75     # float
+age = 25              # integer
+print("Salary:", salary, "| Type:", type(salary))
+print("Age:", age, "| Type:", type(age))
+
+# --- Strings ---
+dept = "Engineering"
+print("Department:", dept)
+print("First 3 letters of dept:", dept[:3])   # slicing
+print("Uppercase Dept:", dept.upper())
+
+# --- Booleans ---
+is_active = True
+print("Is Active:", is_active, "| Type:", type(is_active))
+
+num_str = "123"
+print("Before Conversion:", num_str, "| Type:", type(num_str))
+
+num_int = int(num_str)   # string → integer
+print("After Conversion:", num_int, "| Type:", type(num_int))
+
+float_val = float("45.67")   # string → float
+print("Converted Float:", float_val, "| Type:", type(float_val))
+
+bool_val = bool(1)   # number → boolean
+print("Converted Boolean from 1:", bool_val)
+Type Conversion
+salary = "55000.75"
+salary = float(salary)
+print("Converted salary:", salary, type(salary))
+
+Input/Output
+name = input("Enter name: ")
+print(f"Hello, {name}")
+
+Control Flows & Structures
+Conditionals (if/else)
+salary = 60000
+if salary > 50000:
+    status = "High Earner"
+else:
+    status = "Regular"
+print("Employee Status:", status)
+For Loop
+for row in ["A", "B", "C"]:
+    print("Processing:", row)
+While Loop
+count = 0
+while count < 3:
+    print("Batch:", count)
+    count += 1
+# --- Conditional Statements (if/else) ---
+
+salary = 60000
+
+if salary > 50000:
+    print("High Earner")
+elif salary == 50000:
+    print("Average Earner")
+else:
+    print("Regular Earner")
+
+print("Conditional check complete!\n")
+
+
+# --- For Loop ---
+
+employees = ["Alice", "Bob", "Charlie"]
+
+for emp in employees:
+    print("Processing employee:", emp)
+
+print("For loop completed!\n")
+
+
+# --- For Loop with range() ---
+
+for i in range(1, 4):
+    print("Batch number:", i)
+
+print("Range-based loop completed!\n")
+
+
+# --- While Loop ---
+
+count = 0
+while count < 3:
+    print("While loop iteration:", count)
+    count += 1
+
+print("While loop completed!\n")
+3. Data Structures (Core for ETL)
+Strings
+line = "emp_id,emp_name,salary"
+columns = line.split(",")
+print("Columns:", columns)
+Lists
+employees = ["Alice", "Bob", "Charlie"]
+employees.append("David")
+employees.extend([“Raunak”,”Tarun”,”Arjun”])
+print("Employees List:", employees)
+
+# --- Nested List of Employees ---
+employees = [
+    [101, "Aly", 55000, "HR"],
+    [102, "Binny", 60000, "IT"],
+    [103, "Charmis", 65000, "Finance"],
+    [104, "Davidson", 70000, "IT"]
+]
+employees[0]=[107,"Harsh", 66000, "IT"]
+print("All Employees:", employees)
+employees[0][1]=”Simran”
+print("All Employees:", employees)
+print()
+
+
+# --- Access individual employee ---
+print("First Employee Record:", employees[0])
+print("Second Employee Name:", employees[1][1])
+print("Third Employee Salary:", employees[2][2])
+print()
+
+
+# --- Loop through all employees ---
+print("Employee Details (Row-wise):")
+for emp in employees:
+    print("ID:", emp[0], "| Name:", emp[1], "| Salary:", emp[2], "| Dept:", emp[3])
+print()
+
+
+# --- Extract specific column (all names) ---
+names = [emp[1] for emp in employees]
+print("All Employee Names:", names)
+
+# --- Extract salaries and compute average ---
+salaries = [emp[2] for emp in employees]
+avg_salary = sum(salaries) / len(salaries)
+print("Salaries:", salaries)
+print("Average Salary:", avg_salary)
+print()
+
+
+# --- Filter employees by condition Using List Comprehension---
+it_employees = [emp for emp in employees if emp[3] == "IT"]
+print("Employees in IT Dept:", it_employees)
+
+high_earners = [emp for emp in employees if emp[2] > 60000]
+print("High Earners (salary > 60000):", high_earners)
+Tuples
+record = (101, "Alice", 55000.75)
+print("Tuple Record:", record)
+Dictionaries
+emp = {"id": 101, "name": "Alice", "salary": 55000.75}
+print("Employee Name:", emp["name"])
+Sets
+ids = [101, 102, 101, 103]
+unique_ids = set(ids)
+print("Unique IDs:", unique_ids)
+Sequence Operations
+data = [10, 20, 30, 40, 50]
+print("Slice 1:4 ->", data[1:4])
+# --- Strings ---
+dept = "Engineering"
+print("Department:", dept)
+print("First 3 letters:", dept[:3])       # slicing
+print("Uppercase:", dept.upper())
+print("Replace g->G:", dept.replace("g", "G"))
+print()
+
+
+# --- Lists (mutable) ---
+employees = ["Alice", "Bob", "Charlie"]
+employees.append("David")     # add
+employees[1] = "Bobby"        # modify
+print("Employees List:", employees)
+print("Second employee:", employees[1])
+print()
+
+
+# --- Tuples (immutable) ---
+record = (101, "Alice", 55000.75)
+print("Tuple Record:", record)
+print("Employee ID from tuple:", record[0])
+# record[0] = 102         #  would cause error (immutable)
+print()
+
+
+# --- Dictionaries (key-value) ---
+emp = {"id": 101, "name": "Alice", "salary": 55000.75}
+print("Dictionary:", emp)
+print("Employee Name:", emp["name"])
+emp["salary"] = 60000     # update value
+print("Updated Salary:", emp["salary"])
+print()
+
+
+# --- Sets (unique, unordered) ---
+ids = [101, 102, 101, 103]
+unique_ids = set(ids)      # removes duplicates
+print("IDs with duplicates:", ids)
+print("Unique IDs (Set):", unique_ids)
+print()
+# --- Mutability & Performance ---
+# List (mutable) vs Tuple (immutable)
+list_demo = [1, 2, 3]
+tuple_demo = (1, 2, 3)
+list_demo.append(4)   # works
+print("Mutable List after append:", list_demo)
+
+# tuple_demo.append(4)  
+print("Immutable Tuple stays same:", tuple_demo)
+print()
+--------------------------------------------------
+import keyword
+#print kwlist
+kwlist = keyword.kwlist
+print(kwlist)
+-------------------------------------------------------------
