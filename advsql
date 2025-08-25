@@ -72,6 +72,19 @@ FROM Sales s
 JOIN SalesRegion r ON r.RegionID = s.RegionID
 GROUP BY ROLLUP (r.RegionName, s.ProductName);
 
+SELECT
+  CASE 
+    WHEN GROUPING(r.RegionName) = 1 THEN 'ALL REGIONS'
+    ELSE r.RegionName
+  END AS RegionName,
+
+  SUM(s.Quantity) AS TotalQty,
+  SUM(s.Amount)   AS TotalAmount,
+  GROUPING(r.RegionName) AS G_Region
+FROM Sales s
+JOIN SalesRegion r ON r.RegionID = s.RegionID
+GROUP BY CUBE (r.RegionName);
+
 --------------------------------------------------------------------
 
 
