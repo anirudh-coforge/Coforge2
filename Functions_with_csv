@@ -1,0 +1,33 @@
+import csv
+def load_csv(file_path):
+    """Extract: Load data from CSV"""
+    with open(file_path, "r") as f:
+        reader = csv.DictReader(f)
+        return list(reader)
+
+def transform_data(records):
+    """Transform: Add bonus based on salary"""
+    for row in records:
+        salary = int(row["Salary"])
+        if salary < 6000:
+            row["Bonus"] = salary * 0.1
+        else:
+            row["Bonus"] = salary * 0.2
+    return records
+
+def save_csv(records, file_path):
+    """Load: Save transformed data to new CSV"""
+    with open(file_path, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=records[0].keys())
+        writer.writeheader()
+        writer.writerows(records)
+
+
+---------------------------------------------------
+# Calling functions
+from etl_ex import *
+data = load_csv("employees.csv")
+transformed = transform_data(data)
+save_csv(transformed, "employees_with_bonus.csv")
+
+print("ETL Complete: employees_with_bonus.csv created.")
