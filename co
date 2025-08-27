@@ -37,3 +37,26 @@ class OrgHierarchyETL:
 # Run ETL
 etl = OrgHierarchyETL("employees_with_manager.csv")
 etl.run()
+
+----------------------------------------------
+
+# LAMBDA FUNCTION
+
+import csv
+# Extract
+data = [
+    {"EmpID": "1", "Name": "Amit", "Salary": 35000},
+    {"EmpID": "2", "Name": "Neha", "Salary": 55000},
+    {"EmpID": "3", "Name": "Ravi", "Salary": 75000},
+]
+# Transform using lambda
+# Bonus: 20% if <40000, else 10%
+calc_bonus = lambda s: s * 0.2 if s < 40000 else s * 0.1  
+for row in data:
+    row["Bonus"] = calc_bonus(row["Salary"])
+
+# Load (print results)
+print("Transformed Data:")
+for row in data:
+    print(row)
+
