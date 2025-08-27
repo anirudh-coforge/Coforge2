@@ -1,3 +1,5 @@
+# RECURSION in ETL
+
 import csv
 class OrgHierarchyETL:
     def __init__(self, input_file):
@@ -59,4 +61,482 @@ for row in data:
 print("Transformed Data:")
 for row in data:
     print(row)
+
+--------------------------------------------------------
+
+Question:
+A company wants to calculate a bonus for its employees based on their salary:
+•	If salary is less than 40,000, bonus is 20%.
+•	If salary is between 40,000 and 60,000, bonus is 15%.
+•	If salary is between 60,001 and 80,000, bonus is 10%.
+•	Otherwise, bonus is 5%.
+Write a Python program using if-elif-else to calculate and display the bonus.
+________________________________________
+Solution:
+# Employee salary input
+salary = int(input("Enter employee salary: "))
+
+if salary < 40000:
+    bonus = salary * 0.20
+elif 40000 <= salary <= 60000:
+    bonus = salary * 0.15
+elif 60001 <= salary <= 80000:
+    bonus = salary * 0.10
+else:
+    bonus = salary * 0.05
+print(f"Salary: {salary}, Bonus: {bonus}")
+
+Loops (for, while)
+Loops help process multiple records in ETL.
+•	For Loop (row by row processing)
+Example: Extract data from a list of sales and transform by doubling tax.
+# For loop in ETL
+sales_data = [100, 200, 300, -50]
+
+for sale in sales_data:
+    if sale >= 0:  # condition
+        tax = sale * 0.1
+        print(f"Sale: {sale}, Tax: {tax}")
+    else:
+        print(f"Skipping invalid sale: {sale}")
+
+While Loop (load until condition is met)
+Example: Load data batches until all records are processed.
+# While loop in ETL
+data_batches = ["batch1", "batch2", "batch3"]
+i = 0
+while i < len(data_batches):
+    print(f"Loading {data_batches[i]} into database...")
+    i += 1
+# --- Sequence Operations ---
+numbers = [10, 20, 30, 40, 50]
+print("Numbers:", numbers)
+print("First element:", numbers[0])
+print("Last element:", numbers[-1])
+print("Slice [1:4]:", numbers[1:4])
+print("Step slicing [::2]:", numbers[::2])   # every 2nd element
+print("Length of list:", len(numbers))
+
+1. Console Input & Output
+Used mainly for testing or simple scripts. In ETL, this is not very common but helps in prototyping.
+# --- Console Input ---
+name = input("Enter your name: ")
+print("Hello,", name)
+
+# --- Console Output ---
+salary = 55000
+print("Employee Salary:", salary)
+print(f"Formatted output -> Name: {name}, Salary: {salary}")
+employees = [
+    [101, "Alice", 55000, "HR"],
+    [102, "Bob", 60000, "IT"],
+    [103, "Charlie", 65000, "Finance"],
+    [104, "David", 70000, "IT"]
+]
+print("All Employees (Row-wise):")
+for emp in employees:
+    print(emp)   # prints full list (row)
+print()
+# Convert list of lists into a dictionary
+employees = [
+    [101, "Alice", 55000, "HR"],
+    [102, "Bob", 60000, "IT"],
+    [103, "Charlie", 65000, "Finance"],
+    [104, "David", 70000, "IT"]
+]
+emp_dict = {emp[0]: {"Name": emp[1], "Salary": emp[2], "Dept": emp[3]} for emp in employees}
+print(emp_dict)
+Functions & Modules 
+1. Functions in Python
+A function is a block of reusable code that performs a specific task.
+Instead of repeating code, you wrap logic inside a function and call it whenever needed.
+ Why Functions?
+•	Avoid repetition (DRY principle – Don’t Repeat Yourself).
+•	Organize code into smaller, logical units.
+•	Improve readability and maintainability.
+•	Make testing and debugging easier.
+ Types of Functions:
+1.	Built-in functions → Already available in Python (len(), print(), sum() etc.)
+2.	User-defined functions → Created using def.
+3.	Lambda (anonymous) functions → Single-line, quick functions using lambda.
+ Function Syntax:
+def function_name(parameters):
+    """docstring - explains what function does"""
+    # function body
+    return value
+
+2. Scope in Functions
+•	Local scope: Variables defined inside a function are local.
+•	Global scope: Variables declared outside functions can be accessed inside using global.
+
+3. Recursion in Functions
+•	A function calling itself until a base condition is met.
+•	Useful for problems like factorial, Fibonacci, directory traversal.
+Example:
+def factorial(n):
+    if n == 0:
+        return 1
+    return n * factorial(n-1)
+
+4. Modules in Python
+A module is a Python file containing functions, variables, or classes that can be reused.
+ Why Modules?
+•	Break large programs into smaller, manageable files.
+•	Promote code reuse.
+•	Easier collaboration in teams.
+ Importing Modules
+import math
+print(math.sqrt(16))   # using a built-in module
+from math import sqrt
+print(sqrt(16))        # importing specific function
+
+5. Creating & Using Custom Modules
+You can create your own .py file (module) and use it in other programs.
+Example:
+# etl_utils.py
+def add_bonus(salary, percent):
+    return salary + (salary * percent / 100)
+# main.py
+from etl_utils import add_bonus
+print(add_bonus(5000, 10))   # 5500
+
+ 
+employees = {
+    101: {"Name": "Alice", "Salary": 55000, "Dept": "HR"},
+    102: {"Name": "Bob", "Salary": 60000, "Dept": "IT"},
+    103: {"Name": "Charlie", "Salary": 65000, "Dept": "Finance"},
+    104: {"Name": "David", "Salary": 70000, "Dept": "IT"}
+}
+print("Using .items():")
+for emp_id, details in employees.items():
+    print(f"Employee ID: {emp_id}, Details: {details}")
+print("\nUsing .keys():")
+-----------------------------------------
+for emp_id in employees.keys():
+    print(f"Employee ID: {emp_id}, Details: {employees[emp_id]}")
+emp_dict = dict((emp[0], emp[1:]) for emp in employees)
+print(emp_dict)
+
+2. File I/O
+In ETL, files are a major data source/target (CSV, TXT, JSON).
+# --- Writing to a File ---
+with open("employees.txt", "w") as f:
+    f.write("101,Alice,55000\n")
+    f.write("102,Bob,60000\n")
+print("Data written to employees.txt")
+
+# --- Reading from a File ---
+with open("employees.txt", "r") as f:
+    data = f.readlines()
+print("Data read from file:", data)
+-----------------------------------------------
+with open("employees.txt", "w") as f:
+    f.write("101,Ammy,55000\n")
+    f.write("102,Bobby,60000\n")
+print("Data written to employees.txt")
+-------------------------------------------------------------------
+with open("employees.txt", "r") as f:
+    for line in f:
+        print("File stream read:", line.strip())
+1. Using the built-in csv module
+import csv
+# --- Writing to a CSV File ---
+with open("employees.csv", "w", newline="") as f:
+    writer = csv.writer(f)
+    writer.writerow(["id", "name", "salary"])     # header
+    writer.writerow([101, "Aditya", 55000])
+    writer.writerow([102, "Tarun", 60000])
+    writer.writerow([103, "Arjun", 65000])
+print("CSV file 'employees.csv' created successfully!\n")
+
+
+# --- Reading from a CSV File ---
+with open("employees.csv", "r") as f:
+    reader = csv.reader(f)
+    for row in reader:
+        print("Row:", row)
+----------------------------------------------------------------------------------------------------------
+ 
+A company wants to automate its ETL process for employee data stored in a CSV file.
+•	Extract: Read employee details (EmpID, Name, Department, Salary) from a CSV file.
+•	Transform: Add a new column Bonus such that:
+o	If Salary < 6000, assign 10% bonus.
+o	Otherwise, assign 20% bonus.
+•	Load: Save the updated employee records into a new CSV file with the bonus included.
+Write a Python program that performs this ETL process using the csv module, following the function-based structure:
+1.	load_csv(file_path) → reads data from CSV.
+2.	transform_data(records) → calculates and adds the Bonus.
+3.	save_csv(records, file_path) → writes transformed data back to a new CSV file.
+--------------------------------------------------------------------------------------------------
+Lambda Functions in Python
+A lambda function is a small, anonymous function defined using the keyword lambda.
+It can take any number of arguments but has only one expression.
+ Syntax:
+lambda arguments: expression
+Example:
+add = lambda x, y: x + y
+print(add(5, 3))   # 8
+
+ Lambda Functions in ETL
+In ETL, lambdas are useful for quick transformations, especially in map(), filter(), sorted().
+Example 1: Clean salary strings
+salaries = ["40000", "55000", "75000"]
+clean_salaries = list(map(lambda s: int(s), salaries))
+print(clean_salaries)   # [40000, 55000, 75000]
+Example 2: Extract department names
+employees = [
+    {"EmpID": 101, "Name": "Alice", "Dept": "HR"},
+    {"EmpID": 102, "Name": "Bob", "Dept": "IT"},
+    {"EmpID": 103, "Name": "Charlie", "Dept": "Finance"},
+]
+depts = list(map(lambda e: e["Dept"], employees))
+print(depts)   # ['HR', 'IT', 'Finance']
+
+ Higher-Order Functions
+A higher-order function is a function that:
+1.	Takes another function as an argument, OR
+2.	Returns a function.
+Examples: map(), filter(), reduce(), sorted() in Python.
+
+ ETL Examples with Higher-Order Functions
+Example 1: map() → Apply transformation to all records
+salaries = [35000, 50000, 75000, 90000]
+
+# Add 10% bonus using map + lambda
+bonuses = list(map(lambda s: s * 0.10, salaries))
+print(bonuses)   # [3500.0, 5000.0, 7500.0, 9000.0]
+
+Example 2: filter() → Select only high salaries
+salaries = [35000, 50000, 75000, 90000]
+
+# Keep salaries > 60000
+high_salaries = list(filter(lambda s: s > 60000, salaries))
+print(high_salaries)   # [75000, 90000]
+
+Example 3: reduce() → Aggregate values
+from functools import reduce
+
+salaries = [35000, 50000, 75000, 90000]
+
+# Total salary expense
+total = reduce(lambda a, b: a + b, salaries)
+print(total)   # 250000
+
+Example 4: sorted() with key
+employees = [
+    {"EmpID": 101, "Name": "Alice", "Salary": 55000},
+    {"EmpID": 102, "Name": "Bob", "Salary": 35000},
+    {"EmpID": 103, "Name": "Charlie", "Salary": 75000}
+]
+# Sort employees by salary
+sorted_emps = sorted(employees, key=lambda e: e["Salary"])
+print(sorted_emps)
+
+Why Logging in ETL?
+In ETL pipelines, logging helps you:
+•	Track data extraction, transformations, and loading status.
+•	Debug issues like missing values or invalid formats.
+•	Record errors, warnings, and info for audit purposes.
+
+ Logging Basics
+import logging
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,   # Set minimum log level
+    format="%(asctime)s - %(levelname)s - %(message)s",  
+    filename="etl.log",   # Log file
+    filemode="w"          # Overwrite file each run
+)
+logging.info("ETL job started")
+logging.warning("Missing salary field for EmployeeID 102")
+logging.error("Failed to connect to database")
+logging.info("ETL job completed")
+This writes messages to etl.log with timestamp + severity.
+
+Log Levels
+•	DEBUG → Detailed info for debugging.
+•	INFO → General pipeline progress.
+•	WARNING → Something unexpected but not fatal.
+•	ERROR → Pipeline failed at a step.
+•	CRITICAL → Entire ETL job may fail.
+ETL Example with Logging
+import csv
+import logging
+# Configure logger
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    filename="etl.log",
+    filemode="w"
+)
+
+def load_csv(file_path):
+    """Extract: Load data from CSV"""
+    try:
+        with open(file_path, "r") as f:
+            reader = csv.DictReader(f)
+            logging.info(f"Loaded {file_path} successfully")
+            return list(reader)
+    except Exception as e:
+        logging.error(f"Failed to load {file_path}: {e}")
+        return []
+
+def transform_data(records):
+    """Transform: Add bonus based on salary"""
+    transformed = []
+    for row in records:
+        try:
+            salary = int(row["Salary"])
+            if salary < 40000:
+                row["Bonus"] = salary * 0.2
+            elif 40000 <= salary <= 60000:
+                row["Bonus"] = salary * 0.15
+            elif 60001 <= salary <= 80000:
+                row["Bonus"] = salary * 0.10
+            else:
+                row["Bonus"] = salary * 0.05
+            transformed.append(row)
+            logging.debug(f"Transformed row: {row}")
+        except Exception as e:
+            logging.warning(f"Skipping row due to error: {e}")
+    return transformed
+
+def save_csv(records, file_path):
+    """Load: Save transformed data to new CSV"""
+    try:
+        with open(file_path, "w", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=records[0].keys())
+            writer.writeheader()
+            writer.writerows(records)
+        logging.info(f"Saved transformed data to {file_path}")
+    except Exception as e:
+        logging.error(f"Failed to save {file_path}: {e}")
+
+# ETL Execution
+data = load_csv("employees.csv")
+if data:
+    transformed = transform_data(data)
+    save_csv(transformed, "employees_with_bonus.csv")
+    logging.info("ETL pipeline completed successfully")
+else:
+    logging.critical("ETL pipeline aborted - No data loaded")
+----------------------------------------------------------------------
+Use Case: Employee Data Cleaning with Sequence Operations
+We have raw employee data (list of tuples). Each tuple = (EmpID, Name, Salary, Dept).
+ Raw Data (Extract stage)
+employees = [
+    (101, "Alice", 40000, "HR"),
+    (102, "Bob", 55000, "IT"),
+    (103, "Charlie", 70000, "Finance"),
+    (104, "David", 30000, "IT")
+]
+
+ Transform using Sequence Operations
+1. Indexing → Access fields by position
+print("First employee name:", employees[0][1])   # Alice
+
+2. Slicing → Get subset of records
+print("First two employees:", employees[:2])
+# [(101, 'Alice', 40000, 'HR'), (102, 'Bob', 55000, 'IT')]
+
+3. Concatenation → Add new records
+new_employees = [(105, "Eva", 60000, "HR")]
+all_employees = employees + new_employees
+print("After adding Eva:", all_employees)
+
+4. Repetition → Duplicate sample data (simulate test set)
+test_data = employees * 2
+print("Repeated dataset:", test_data)
+
+5. Membership → Check if department exists
+print("Is HR in departments?", "HR" in [emp[3] for emp in employees])   # True
+print("Is Sales in departments?", "Sales" in [emp[3] for emp in employees])  # False
+
+6. Iteration → Loop through employees
+for emp in employees:
+    print("Employee:", emp[1], "Salary:", emp[2])
+
+7. Built-in Functions → Quick aggregations
+salaries = [emp[2] for emp in employees]
+
+print("Total salary:", sum(salaries))      # 195000
+print("Max salary:", max(salaries))        # 70000
+print("Min salary:", min(salaries))        # 30000
+print("Sorted salaries:", sorted(salaries))  # [30000, 40000, 55000, 70000]
+
+ Load (Final Transformed Data)
+transformed = [(emp[0], emp[1], emp[2], emp[3], emp[2]*0.1) for emp in employees]
+print("Employees with bonus:", transformed)
+
+Streams (Standard Input/Output/Error)
+Python uses streams for data flow.
+•	sys.stdin → Standard Input (keyboard, console, file)
+•	sys.stdout → Standard Output (console by default)
+•	sys.stderr → Standard Error (error messages)
+import sys
+sys.stdout.write("This goes to standard output\n")
+sys.stderr.write("This is an error message\n")
+
+ 1. Lambda Functions in ETL
+•	A lambda function is an anonymous function (no name) created using lambda.
+•	Useful for short transformations in ETL pipelines.
+ ETL Example – Salary Bonus Calculation
+import csv
+# Extract
+data = [
+    {"EmpID": "1", "Name": "Amit", "Salary": 35000},
+    {"EmpID": "2", "Name": "Neha", "Salary": 55000},
+    {"EmpID": "3", "Name": "Ravi", "Salary": 75000},
+]
+# Transform using lambda
+# Bonus: 20% if <40000, else 10%
+calc_bonus = lambda s: s * 0.2 if s < 40000 else s * 0.1  
+for row in data:
+    row["Bonus"] = calc_bonus(row["Salary"])
+
+# Load (print results)
+print("Transformed Data:")
+for row in data:
+    print(row)
+Output
+{'EmpID': '1', 'Name': 'Amit', 'Salary': 35000, 'Bonus': 7000.0}
+{'EmpID': '2', 'Name': 'Neha', 'Salary': 55000, 'Bonus': 5500.0}
+{'EmpID': '3', 'Name': 'Ravi', 'Salary': 75000, 'Bonus': 7500.0}
+
+ 2. Higher-Order Functions in ETL
+•	A higher-order function is a function that either:
+o	takes another function as input (argument), or
+o	returns a function.
+•	Very useful in ETL to apply flexible transformations.
+
+ Example 1 – Using map with lambda (Transformation step)
+salaries = [30000, 45000, 70000]
+# Apply bonus calculation on each salary
+bonuses = list(map(lambda s: s * 0.2 if s < 40000 else s * 0.1, salaries))
+print("Bonuses:", bonuses)
+ Output
+Bonuses: [6000.0, 4500.0, 7000.0]
+
+ 
+Example 2 – Using filter to clean invalid data
+raw_salaries = [25000, -1000, 50000, 0, 80000]
+
+# Filter out negative or zero salaries
+valid_salaries = list(filter(lambda s: s > 0, raw_salaries))
+
+print("Valid Salaries:", valid_salaries)
+ Output
+Valid Salaries: [25000, 50000, 80000]
+
+ Example 3 – Using reduce for aggregation (Load step)
+from functools import reduce
+salaries = [30000, 40000, 50000]
+# Total salary cost
+total_salary = reduce(lambda x, y: x + y, salaries)
+print("Total Salary Cost:", total_salary)
+ 
+Output
+Total Salary Cost: 120000
+
+
 
