@@ -1,0 +1,39 @@
+import csv
+class OrgHierarchyETL:
+    def __init__(self, input_file):
+        self.input_file = input_file
+        self.data = {}
+        self.hierarchy = {}
+
+    # Extract step
+    def extract(self):
+        with open(self.input_file, "r") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                emp_id = row["EmpID"]
+                self.data[emp_id] = row
+
+    # Transform step (recursive building of hierarchy)
+    def _build_hierarchy(self, manager_id=None, level=0):
+        for emp_id, row in self.data.items():
+            if row["ManagerID"] == manager_id or (manager_id is None and row["ManagerID"] == "NULL"):
+                print("   " * level + f"{row['Name']} (ID:{emp_id})")
+                self._build_hierarchy(emp_id, level + 1)
+
+    def transform(self):
+        print("Organization Hierarchy:")
+        self._build_hierarchy()
+
+    # Load step (for now just prints hierarchy)
+    def load(self):
+        print("\n[INFO] Hierarchy loaded successfully")
+
+    def run(self):
+        self.extract()
+        self.transform()
+        self.load()
+
+
+# Run ETL
+etl = OrgHierarchyETL("employees_with_manager.csv")
+etl.run()
