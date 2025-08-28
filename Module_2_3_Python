@@ -538,5 +538,10 @@ print("Total Salary Cost:", total_salary)
 Output
 Total Salary Cost: 120000
 
+records = [
+    {"EmpID": "1", "Name": "Raj", "Department": "IT", "Salary": "50000"},
+    {"EmpID": "2", "Name": "Asha", "Department": "HR", "Salary": "30000"},
+    {"EmpID": "3", "Name": "Nisha", "Department": "Sales", "Salary": "30000"},
+]
 
 
