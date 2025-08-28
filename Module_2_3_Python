@@ -544,4 +544,39 @@ records = [
     {"EmpID": "3", "Name": "Nisha", "Department": "Sales", "Salary": "30000"},
 ]
 
+A company wants to implement an ETL pipeline to calculate employee bonuses.In the general rule, employees receive:
 
+20% bonus if their salary is below 40,000.
+10% bonus otherwise.
+However, the IT department has a special rule:
+Employees in IT should get a 25% bonus, regardless of salary.
+You need to design the ETL pipeline using Object-Oriented Programming (OOP) concepts:
+Create a base class EmployeeETL that defines the general bonus calculation logic.
+Create a child class ITEmployeeETL that inherits from EmployeeETL but overrides the transformation logic to apply the special rule for IT employees.
+For non-IT employees, the child class should still reuse the parent’s logic (via inheritance)
+
+class EmployeeETL:
+    def transform(self, records):
+        for row in records:
+            salary = int(row["Salary"])
+            if salary < 40000:
+                row["Bonus"] = salary * 0.2
+            else:
+                row["Bonus"] = salary * 0.1
+        return records
+class ITEmployeeETL(EmployeeETL):   # Inheriting
+    def transform(self, records):
+        for row in records:
+            salary = int(row["Salary"])
+            if row["Department"] == "IT":   # Override rule
+                row["Bonus"] = salary * 0.25
+            else:
+                super().transform([row])    # Call parent for others
+        return records
+records = [
+    {"EmpID": "1", "Name": "Raj", "Department": "IT", "Salary": "50000"},
+    {"EmpID": "2", "Name": "Asha", "Department": "HR", "Salary": "30000"},
+    {"EmpID": "3", "Name": "Nisha", "Department": "Sales", "Salary": "30000"},
+]
+etl = ITEmployeeETL()
+print(etl.transform(records))
