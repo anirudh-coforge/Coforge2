@@ -1,0 +1,15 @@
+import pandas as pd
+from sqlalchemy import create_engine
+mssql_engine = create_engine(
+    "mssql+pyodbc://@localhost/SourceDB?driver=ODBC+Driver+17+for+SQL+Server;Trusted_Connection=yes"
+)
+mysql_engine = create_engine(
+    "mysql+pymysql://root:YourPassword@localhost/TargetDB"
+)
+query = "SELECT * FROM Employees"
+chunksize = 10000
+for chunk in pd.read_sql(query, mssql_engine, chunksize=chunksize):
+    
+    chunk["Bonus"] = chunk["Salary"].apply(lambda x: x*0.2 if x < 40000 else x*0.1)    
+    chunk.to_sql("Employees", mysql_engine, if_exists="append", index=False)
+    print(f"Migrated {len(chunk)} rows...")
