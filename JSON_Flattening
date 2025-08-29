@@ -133,3 +133,150 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+-------------------------------------------------------------------
+
+import json
+import pandas as pd
+from sqlalchemy import create_engine
+from pandas import json_normalize
+import logging
+import urllib
+
+# Configure logging for better visibility into the process
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# ---------- Configure ----------
+JSONL_FILE = "employees_1m.jsonl"
+CHUNK_SIZE_LINES = 50_000
+
+MSSQL_CONN = (
+    "mssql+pyodbc:///?odbc_connect="
+    "Driver={ODBC+Driver+17+for+SQL+Server};"
+    "Server=localhost\\SQLEXPRESS;"
+    "Database=ETLDB;"
+    "Trusted_Connection=yes;"
+)
+
+engine = create_engine(MSSQL_CONN, fast_executemany=True)
+
+# Correct the table names to exclude the schema prefix
+EMP_TABLE = "Employees"
+PRJ_TABLE = "Projects"
+DB_SCHEMA = "dbo"  # Specify the schema separately
+# -------------------------------
+
+def process_batch(lines):
+    # This function remains the same as in your previous script
+    records = []
+    for l in lines:
+        try:
+            records.append(json.loads(l))
+        except json.JSONDecodeError as e:
+            logging.error(f"Skipping malformed JSON line: {l.strip()}. Error: {e}")
+            continue
+
+    if not records:
+        return pd.DataFrame(), pd.DataFrame()
+
+    df_emp = json_normalize(records, sep="_")
+    df_prj = json_normalize(records, record_path="Projects", meta=["EmpID"], sep="_", errors="ignore")
+
+    emp_cols = ["EmpID", "Name", "Dept_Name", "Dept_Location", "Salary", "HiredAt"]
+    df_emp = df_emp[[c for c in emp_cols if c in df_emp.columns]]
+    df_emp["EmpID"] = pd.to_numeric(df_emp["EmpID"], errors="coerce").astype("Int64")
+    df_emp["Salary"] = pd.to_numeric(df_emp["Salary"], errors="coerce").astype("Int64")
+    df_emp["HiredAt"] = pd.to_datetime(df_emp["HiredAt"], errors="coerce").dt.date
+
+    if not df_prj.empty:
+        prj_cols = ["ProjectID", "Title", "EmpID"]
+        df_prj = df_prj[[c for c in prj_cols if c in df_prj.columns]]
+        df_prj["EmpID"] = pd.to_numeric(df_prj["EmpID"], errors="coerce").astype("Int64")
+        df_prj["ProjectID"] = pd.to_numeric(df_prj["ProjectID"], errors="coerce").astype("Int64")
+    else:
+        df_prj = pd.DataFrame(columns=["ProjectID", "Title", "EmpID"])
+
+    return df_emp, df_prj
+
+def main():
+    total_emp = 0
+    total_prj = 0
+    emp_cols_count = 6
+    prj_cols_count = 3
+    insert_chunksize_emp = 2100 // emp_cols_count - 1
+    insert_chunksize_prj = 2100 // prj_cols_count - 1
+
+    logging.info(f"Using database chunksize: {insert_chunksize_emp} for employees, {insert_chunksize_prj} for projects")
+
+    try:
+        with open(JSONL_FILE, "r", encoding="utf-8") as f:
+            batch = []
+            for line in f:
+                if line.strip():
+                    batch.append(line)
+                if len(batch) >= CHUNK_SIZE_LINES:
+                    df_emp, df_prj = process_batch(batch)
+                   
+                    if not df_emp.empty:
+                        df_emp.to_sql(
+                            EMP_TABLE,
+                            engine,
+                            if_exists="append",
+                            index=False,
+                            method='multi',
+                            chunksize=insert_chunksize_emp,
+                            schema=DB_SCHEMA  # Pass schema explicitly
+                        )
+                        total_emp += len(df_emp)
+                        logging.info(f"Inserted {total_emp:,} employee rows so far")
+
+                    if not df_prj.empty:
+                        df_prj.to_sql(
+                            PRJ_TABLE,
+                            engine,
+                            if_exists="append",
+                            index=False,
+                            method='multi',
+                            chunksize=insert_chunksize_prj,
+                            schema=DB_SCHEMA # Pass schema explicitly
+                        )
+                        total_prj += len(df_prj)
+                        logging.info(f"Inserted {total_prj:,} project rows so far")
+
+                    batch.clear()
+
+            if batch:
+                df_emp, df_prj = process_batch(batch)
+                if not df_emp.empty:
+                    df_emp.to_sql(
+                        EMP_TABLE,
+                        engine,
+                        if_exists="append",
+                        index=False,
+                        method='multi',
+                        chunksize=insert_chunksize_emp,
+                        schema=DB_SCHEMA
+                    )
+                    total_emp += len(df_emp)
+               
+                if not df_prj.empty:
+                    df_prj.to_sql(
+                        PRJ_TABLE,
+                        engine,
+                        if_exists="append",
+                        index=False,
+                        method='multi',
+                        chunksize=insert_chunksize_prj,
+                        schema=DB_SCHEMA
+                    )
+                    total_prj += len(df_prj)
+
+    except Exception as e:
+        logging.error(f"An error occurred during file processing: {e}")
+   
+    logging.info("--- Data loading complete ---")
+    logging.info(f"Total employee rows inserted: {total_emp:,}")
+    logging.info(f"Total project rows inserted: {total_prj:,}")
+
+if __name__ == "__main__":
+    main()
