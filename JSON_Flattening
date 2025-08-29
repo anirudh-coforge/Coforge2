@@ -284,6 +284,7 @@ if __name__ == "__main__":
 
 create Database ETLDB;
 use ETLDB;
-create Table Employees ( EmpID int, Name varchar(50), Dept_Name varchar(50), Dept_Location varchar(50), Salary int, HiredAt date);
+create Table Employees ( EmpID bigint, Name varchar(50), Dept_Name varchar(50), Dept_Location varchar(50), Salary int, HiredAt date);
 
-create Table Projects (ProjectID int, Title varchar(100), EmpID int);
+create Table Projects (ProjectID int, Title varchar(100), EmpID bigint);
+
