@@ -1,0 +1,135 @@
+import json
+import random
+from datetime import datetime, timedelta
+from pathlib import Path
+
+OUT_FILE = "employees_1m.jsonl"
+N = 1_000_000
+
+FIRST_NAMES = ["Raj", "Asha", "Nisha", "Amit", "Vikram", "Meena", "Anil", "Pooja", "Ramesh", "Kiran"]
+DEPTS = [
+    {"Name": "IT", "Location": "Delhi"},
+    {"Name": "HR", "Location": "Mumbai"},
+    {"Name": "Finance", "Location": "Bengaluru"},
+    {"Name": "Sales", "Location": "Pune"},
+    {"Name": "Ops", "Location": "Hyderabad"},
+]
+
+def rand_date(start_year=2018, end_year=2025):
+    start = datetime(start_year, 1, 1)
+    end   = datetime(end_year, 12, 31)
+    delta = end - start
+    return (start + timedelta(days=random.randint(0, delta.days))).strftime("%Y-%m-%d")
+
+def make_projects(emp_id):
+    k = random.randint(0, 3)  # 0-3 projects
+    projects = []
+    for i in range(k):
+        pid = emp_id * 10_000 + i
+        projects.append({"ProjectID": pid, "Title": random.choice(["Migration", "Automation", "Analytics", "Upgrade"])})
+    return projects
+
+def main():
+    Path(OUT_FILE).unlink(missing_ok=True)
+    with open(OUT_FILE, "w", encoding="utf-8") as f:
+        for emp_id in range(1, N + 1):
+            rec = {
+                "EmpID": emp_id,
+                "Name": random.choice(FIRST_NAMES),
+                "Dept": random.choice(DEPTS),
+                "Projects": make_projects(emp_id),
+                "Salary": random.randint(20000, 150000),
+                "HiredAt": rand_date()
+            }
+            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+            if emp_id % 100_000 == 0:
+                print(f"[GEN] wrote {emp_id:,} records")
+    print(f"Done. File: {OUT_FILE}")
+
+if __name__ == "__main__":
+    main()
+
+-------------------------------------------------------------------------------------
+# Flattening & placing in MS SQL server 
+import json
+import pandas as pd
+from sqlalchemy import create_engine
+from pandas import json_normalize
+
+# ---------- Configure ----------
+JSONL_FILE = "employees_1m.jsonl"
+CHUNK = 50_000  # tune based on memory/IO
+MSSQL_CONN = (
+    "mssql+pyodbc://@localhost/ETLDB?"
+    "driver=ODBC+Driver+17+for+SQL+Server;Trusted_Connection=yes"
+)
+EMP_TABLE = "dbo.Employees"
+PRJ_TABLE = "dbo.Projects"
+# -------------------------------
+
+engine = create_engine(MSSQL_CONN, fast_executemany=True)
+
+def process_batch(lines):
+    """
+    lines: list[str] of NDJSON lines
+    returns: (df_emp, df_prj)
+    """
+    records = [json.loads(l) for l in lines]
+
+    # Flatten top-level and 'Dept' dict into columns Dept_Name, Dept_Location
+    df_emp = json_normalize(records, sep="_")
+    # Keep only employee columns we care about
+    df_emp = df_emp[["EmpID", "Name", "Dept_Name", "Dept_Location", "Salary", "HiredAt"]]
+
+    # Flatten 'Projects' (list) into separate table, keep EmpID as FK
+    df_prj = json_normalize(
+        records,
+        record_path="Projects",
+        meta=["EmpID"],
+        sep="_"
+    )
+
+    # If no projects existed in this batch, ensure proper columns
+    if df_prj.empty:
+        df_prj = pd.DataFrame(columns=["ProjectID", "Title", "EmpID"])
+
+    # Ensure dtypes
+    df_emp["EmpID"] = df_emp["EmpID"].astype("int64")
+    df_emp["Salary"] = pd.to_numeric(df_emp["Salary"], errors="coerce").astype("Int64")
+    df_emp["HiredAt"] = pd.to_datetime(df_emp["HiredAt"], errors="coerce").dt.date
+
+    if not df_prj.empty:
+        df_prj["EmpID"] = df_prj["EmpID"].astype("int64")
+        df_prj["ProjectID"] = pd.to_numeric(df_prj["ProjectID"], errors="coerce").astype("Int64")
+
+    return df_emp, df_prj
+
+def main():
+    total = 0
+    with open(JSONL_FILE, "r", encoding="utf-8") as f:
+        batch = []
+        for line in f:
+            if line.strip():
+                batch.append(line)
+            if len(batch) >= CHUNK:
+                df_emp, df_prj = process_batch(batch)
+                df_emp.to_sql(EMP_TABLE, engine, if_exists="append", index=False)
+                if not df_prj.empty:
+                    df_prj.to_sql(PRJ_TABLE, engine, if_exists="append", index=False)
+                total += len(batch)
+                print(f"[LOAD] inserted {total:,} rows (employees) so far")
+                batch.clear()
+
+        # Flush remainder
+        if batch:
+            df_emp, df_prj = process_batch(batch)
+            df_emp.to_sql(EMP_TABLE, engine, if_exists="append", index=False)
+            if not df_prj.empty:
+                df_prj.to_sql(PRJ_TABLE, engine, if_exists="append", index=False)
+            total += len(batch)
+            print(f"[LOAD] inserted {total:,} rows total")
+
+    print("Done.")
+
+if __name__ == "__main__":
+    main()
