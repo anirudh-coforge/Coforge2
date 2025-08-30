@@ -1,0 +1,20 @@
+import pandas as pd
+import numpy as np
+
+# Number of records
+N = 1_000_000  
+
+# Generate synthetic data
+df = pd.DataFrame({
+    "id": range(1, N + 1),
+    "name": ["Employee_" + str(i) for i in range(1, N + 1)],
+    "city": np.random.choice(["New York", "London", "Paris", "Tokyo", "Delhi"], size=N),
+    "department": np.random.choice(["HR", "Finance", "IT", "Sales", "Marketing"], size=N),
+    "salary": np.random.randint(25000, 120000, size=N),
+    "age": np.random.randint(21, 60, size=N)
+})
+
+# Save to CSV
+df.to_csv("employee_data.csv", index=False)
+
+print("1 million records saved to employee_data.csv")
