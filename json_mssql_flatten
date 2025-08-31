@@ -1,0 +1,48 @@
+import requests
+import pandas as pd
+from sqlalchemy import create_engine, text
+
+# -------------------- EXTRACT --------------------
+url = "https://api.coingecko.com/api/v3/coins/markets"
+params = {
+    "vs_currency": "usd",
+    "order": "market_cap_desc",
+    "per_page": 50,   # keep smaller for testing first
+    "page": 1,
+    "sparkline": "false"
+}
+print("Fetching API data...")
+response = requests.get(url, params=params)
+data = response.json()
+
+if not data:
+    print(" No data returned from API")
+else:
+    print(f"Retrieved {len(data)} records")
+
+#  TRANSFORM 
+df = pd.json_normalize(data)
+print(" Data flattened with json_normalize")
+print(df.head(5))   # preview first 5 rows
+
+
+df = df[["id", "symbol", "name", "current_price", "market_cap", "total_volume"]]
+
+# LOAD to MS SQL 
+print("Connecting to MS SQL Server...")
+engine = create_engine(
+    "mssql+pyodbc:///?odbc_connect="
+    "Driver={ODBC Driver 17 for SQL Server};"
+    "Server=localhost\\SQLEXPRESS;"
+    "Database=CryptoDB;"
+    "Trusted_Connection=yes;"
+)
+
+with engine.begin() as conn:
+    df.to_sql("crypto_data", conn, if_exists="replace", index=False)
+    print("Data inserted into MS SQL Server table 'crypto_data'")
+
+    # Verify by selecting first 5 rows
+    result = conn.execute(text("SELECT TOP 5 * FROM crypto_data"))
+    for row in result:
+        print(row)
