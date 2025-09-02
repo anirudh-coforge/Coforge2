@@ -1,3 +1,12 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import re
+from collections import defaultdict
+from tqdm import tqdm
+
+
 rows = 50_000   # for demo (change to 10_000_000 for ~1GB)
 np.random.seed(42)
 
