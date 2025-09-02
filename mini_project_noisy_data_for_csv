@@ -1,0 +1,23 @@
+rows = 50_000   # for demo (change to 10_000_000 for ~1GB)
+np.random.seed(42)
+
+data = {
+    "OrderID": np.arange(1, rows+1),
+    "Customer": np.random.choice(
+        ["Alice ", " Bob", "Charlie", None, "Eva", "Dave ", "alice"], rows),
+    "Product": np.random.choice(
+        ["Laptop", "Mobile", "Tablet", "Headphones", "Laptop ", "mobile"], rows),
+    "Quantity": np.random.choice([1, 2, 3, np.nan, 5], rows),
+    "Price": np.random.choice(
+        [500, 800, 850, 300, "not_available", np.nan], rows),
+    "OrderDate": np.random.choice(
+        ["2021-07-01", "2021/07/05", "07-10-2021", None], rows),
+    "Region": np.random.choice(
+        ["North", "East", "West", "South", " Unknown"], rows)
+}
+
+df = pd.DataFrame(data)
+df.to_csv("raw_sales.csv", index=False)
+print(" Noisy dataset saved as raw_sales.csv (rows:", len(df), ")")
+
+df.head()
