@@ -1,0 +1,210 @@
+# build_ms_sql_5_tables.py
+import os
+import time
+import math
+import numpy as np
+import pandas as pd
+import requests
+from sqlalchemy import create_engine, text
+import urllib
+from datetime import datetime, timedelta
+
+# ---------- CONFIG ----------
+MSSQL_SERVER   = "DESKTOP-6B6KT5K"
+MSSQL_DB       = "cryptodb"
+MSSQL_DRIVER   = "ODBC Driver 17 for SQL Server"
+
+# ~Target sizes: tune rows to approach ~1GB each (depends on schema & types).
+ROWS_CRYPTO      = None        # crypto_data is API driven; leave None (you control by pages/time)
+ROWS_CUSTOMERS   = 5_000_000   # adjust as needed
+ROWS_ORDERS      = 8_000_000
+ROWS_PAGEVIEWS   = 12_000_000
+ROWS_PRODUCTS    = 3_000_000
+
+CHUNK_ROWS       = 200_000     # generation chunk size for synthetic tables (memory-friendly)
+TO_SQL_CHUNKSIZE = 50_000      # write batch size
+SEED             = 42
+np.random.seed(SEED)
+
+# ---------- MS SQL ENGINE ----------
+mssql_conn_str = (
+    f"Driver={{{MSSQL_DRIVER}}};"
+    f"Server={MSSQL_SERVER};"
+    f"Database={MSSQL_DB};"
+    "Trusted_Connection=yes;"
+)
+mssql_engine = create_engine(f"mssql+pyodbc:///?odbc_connect={urllib.parse.quote_plus(mssql_conn_str)}",
+                             fast_executemany=True)
+
+# ---------- TABLE 1: crypto_data (from CoinGecko) ----------
+def build_crypto_data_via_api():
+    url = "https://api.coingecko.com/api/v3/coins/markets"
+    params = {
+        "vs_currency": "usd",
+        "order": "market_cap_desc",
+        "per_page": 250,   # max per request
+        "page": 1,
+        "sparkline": False
+    }
+
+    total_pages = 4000          # ~1M rows max potential (subject to API + time)
+    chunk_pages = 20            # 20 pages (~5k rows) per chunk
+    sleep_time  = 2.5           # throttle between calls
+    max_retries = 5
+    time_limit_sec = 600        # stop after 10 min (you can increase)
+    start_time = time.time()
+
+    def fetch_page(page):
+        for attempt in range(max_retries):
+            try:
+                params["page"] = page
+                r = requests.get(url, params=params, timeout=15)
+                if r.status_code == 200:
+                    return r.json()
+                elif r.status_code == 429:
+                    backoff = (attempt + 1) * 10
+                    print(f"[crypto_data] 429 rate limit. Sleeping {backoff}s...")
+                    time.sleep(backoff)
+                else:
+                    print(f"[crypto_data] Failed page {page}: {r.status_code}")
+                    return []
+            except Exception as e:
+                print(f"[crypto_data] Error page {page}, attempt {attempt+1}: {e}")
+                time.sleep((attempt + 1) * 5)
+        print(f"[crypto_data] Skipping page {page} after {max_retries} retries")
+        return []
+
+    first_chunk = True
+    for start_page in range(1, total_pages + 1, chunk_pages):
+        if time.time() - start_time > time_limit_sec:
+            print("[crypto_data] Time limit reached, stopping API extraction.")
+            break
+
+        all_data = []
+        for page in range(start_page, start_page + chunk_pages):
+            if page > total_pages:
+                break
+            page_data = fetch_page(page)
+            if page_data:
+                all_data.extend(page_data)
+                print(f"[crypto_data] Page {page} fetched ({len(page_data)} rows, chunk size {len(all_data)})")
+            time.sleep(sleep_time)
+
+        if not all_data:
+            continue
+
+        df = pd.json_normalize(all_data)
+        if df.empty:
+            continue
+
+        # Basic transforms
+        df = df.drop_duplicates(subset="id")
+        df["price_log"] = df["current_price"].apply(lambda x: np.log(x) if x and x > 0 else None)
+        if df["total_volume"].std() > 0:
+            df["volume_normalized"] = (df["total_volume"] - df["total_volume"].mean()) / df["total_volume"].std()
+        else:
+            df["volume_normalized"] = 0
+
+        df.to_sql("crypto_data", mssql_engine,
+                  if_exists="replace" if first_chunk else "append",
+                  index=False, chunksize=TO_SQL_CHUNKSIZE)
+        first_chunk = False
+        print(f"[crypto_data] Loaded chunk starting at page {start_page} → {len(df)} rows")
+        time.sleep(10)
+
+    with mssql_engine.connect() as conn:
+        cnt = conn.execute(text("SELECT COUNT(*) FROM crypto_data")).scalar()
+        print(f"[crypto_data] Final row count in MS SQL: {cnt}")
+
+# ---------- Synthetic table helpers ----------
+def synth_customers(n):
+    # Wide-ish table to consume space
+    ids = np.arange(1, n + 1)
+    first = np.random.choice(["Aarav", "Vihaan", "Vivaan", "Aditya", "Arjun", "Sai", "Krishna", "Ishaan"], size=n)
+    last  = np.random.choice(["Sharma", "Verma", "Gupta", "Patel", "Singh", "Khan", "Yadav", "Das"], size=n)
+    ages  = np.random.randint(18, 80, size=n)
+    inc   = np.random.lognormal(mean=10, sigma=0.6, size=n).round(2)  # ~ INR-like
+    city  = np.random.choice(["Delhi","Mumbai","Bengaluru","Hyderabad","Chennai","Pune","Kolkata"], size=n)
+    join  = pd.to_datetime("2015-01-01") + pd.to_timedelta(np.random.randint(0, 365*9, size=n), unit="D")
+    email = (pd.Series(first).str.lower()+"."+pd.Series(last).str.lower()+"@example.com")
+    note  = np.random.choice(["VIP","REGULAR","","",""], size=n)
+
+    return pd.DataFrame({
+        "customer_id": ids,
+        "first_name": first, "last_name": last,
+        "age": ages, "annual_income": inc,
+        "city": city, "joined_at": join,
+        "email": email, "notes": note
+    })
+
+def synth_orders(n, customer_id_range):
+    ids = np.arange(1, n + 1)
+    cust = np.random.randint(1, customer_id_range + 1, size=n)
+    order_date = pd.to_datetime("2018-01-01") + pd.to_timedelta(np.random.randint(0, 365*7, size=n), unit="D")
+    amount = np.random.gamma(3.0, 2000, size=n).round(2)
+    status = np.random.choice(["NEW","PAID","SHIPPED","CANCELLED","REFUNDED"], size=n, p=[0.25,0.35,0.25,0.1,0.05])
+    channel = np.random.choice(["WEB","APP","STORE"], size=n, p=[0.6,0.3,0.1])
+    return pd.DataFrame({
+        "order_id": ids, "customer_id": cust, "order_date": order_date,
+        "amount": amount, "status": status, "channel": channel
+    })
+
+def synth_pageviews(n, customer_id_range):
+    pv_id = np.arange(1, n + 1)
+    cust  = np.random.randint(1, customer_id_range + 1, size=n)
+    ts    = pd.to_datetime("2020-01-01") + pd.to_timedelta(np.random.randint(0, 365*4*24*60, size=n), unit="m")
+    page  = np.random.choice(["/","/home","/product","/search","/cart","/checkout","/help"], size=n)
+    ref   = np.random.choice(["direct","google","bing","email","ads","social"], size=n)
+    dur   = np.random.exponential(scale=60, size=n).round(2)  # seconds
+    dev   = np.random.choice(["mobile","desktop","tablet"], size=n, p=[0.6,0.35,0.05])
+    return pd.DataFrame({
+        "view_id": pv_id, "customer_id": cust, "ts": ts, "page": page,
+        "referrer": ref, "duration_sec": dur, "device": dev
+    })
+
+def synth_products(n):
+    pid   = np.arange(1, n + 1)
+    cat   = np.random.choice(["Books","Electronics","Clothing","Grocery","Fitness","Home"], size=n)
+    price = np.random.lognormal(mean=4, sigma=0.5, size=n).round(2)
+    stock = np.random.randint(0, 5000, size=n)
+    rating= np.clip(np.random.normal(4.0, 0.6, size=n), 1, 5).round(2)
+    title = "Product-" + pd.Series(pid).astype(str)
+    desc  = np.random.choice(["Good","Popular","New","Bestseller","Limited","Classic"], size=n)
+    return pd.DataFrame({
+        "product_id": pid, "category": cat, "price": price,
+        "stock": stock, "rating": rating, "title": title, "tag": desc
+    })
+
+def write_synthetic(table_name, total_rows, df_generator, *gen_args):
+    if total_rows is None or total_rows <= 0:
+        print(f"[{table_name}] skipped (rows not specified).")
+        return
+    first = True
+    written = 0
+    while written < total_rows:
+        rows = min(CHUNK_ROWS, total_rows - written)
+        df = df_generator(rows, *gen_args) if gen_args else df_generator(rows)
+        df.to_sql(table_name, mssql_engine,
+                  if_exists="replace" if first else "append",
+                  index=False, chunksize=TO_SQL_CHUNKSIZE)
+        written += rows
+        first = False
+        print(f"[{table_name}] Wrote {rows} rows (total {written}/{total_rows})")
+    with mssql_engine.connect() as conn:
+        cnt = conn.execute(text(f"SELECT COUNT(*) FROM {table_name}")).scalar()
+        print(f"[{table_name}] Final row count: {cnt}")
+
+def main():
+    # 1) Build crypto_data via API (timeboxed)
+    build_crypto_data_via_api()
+
+    # 2) Build 4 synthetic ~1GB tables (adjust ROWS_* to tune size)
+    write_synthetic("customers_big",   ROWS_CUSTOMERS,  synth_customers)
+    # For orders/pageviews we need the max customer_id range:
+    cust_count = ROWS_CUSTOMERS if ROWS_CUSTOMERS else 5_000_000
+    write_synthetic("orders_big",      ROWS_ORDERS,     synth_orders, cust_count)
+    write_synthetic("pageviews_big",   ROWS_PAGEVIEWS,  synth_pageviews, cust_count)
+    write_synthetic("products_big",    ROWS_PRODUCTS,   synth_products)
+
+if __name__ == "__main__":
+    main()
