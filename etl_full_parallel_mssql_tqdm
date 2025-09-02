@@ -1,0 +1,131 @@
+# etl_full_parallel_mssql_tqdm.py
+import os
+import time
+import math
+import numpy as np
+import pandas as pd
+import requests
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from sqlalchemy import create_engine, text
+import urllib
+from tqdm import tqdm   # <-- progress bar
+
+# ---------- CONFIG ----------
+MSSQL_SERVER   = "DESKTOP-6B6KT5K"
+MSSQL_DB       = "bigdata"
+MSSQL_DRIVER   = "ODBC Driver 17 for SQL Server"
+
+DATA_DIR       = r"C:\data_bulk"
+os.makedirs(DATA_DIR, exist_ok=True)
+
+# Adjust size targets
+ROWS_PER_TABLE = 5_000_000    # ~1GB each depending on schema
+CHUNK_SIZE     = 500_000
+THREADS        = 8
+SEED_ROWS      = 1000
+
+# ---------- ENGINE ----------
+mssql_conn_str = (
+    f"Driver={{{MSSQL_DRIVER}}};"
+    f"Server={MSSQL_SERVER};"
+    f"Database={MSSQL_DB};"
+    "Trusted_Connection=yes;"
+)
+mssql_engine = create_engine(f"mssql+pyodbc:///?odbc_connect={urllib.parse.quote_plus(mssql_conn_str)}",
+                             fast_executemany=True)
+
+# ---------- APIs (example endpoints) ----------
+API_ENDPOINTS = {
+    "crypto_data": "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=50&page=1&sparkline=false",
+    "users":       "https://randomuser.me/api/?results=50",
+    "posts":       "https://jsonplaceholder.typicode.com/posts",
+    "comments":    "https://jsonplaceholder.typicode.com/comments",
+    "todos":       "https://jsonplaceholder.typicode.com/todos"
+}
+
+# ---------- HELPERS ----------
+def fetch_api_json(url):
+    try:
+        r = requests.get(url, timeout=15)
+        if r.status_code == 200:
+            return r.json()
+    except Exception as e:
+        print(f"[API] error {url}: {e}")
+    return []
+
+def normalize_data(name, data):
+    if name == "crypto_data":
+        return pd.json_normalize(data)
+    if name == "users":
+        return pd.json_normalize(data["results"])
+    return pd.DataFrame(data)
+
+def save_seed_csv(name, df):
+    path = os.path.join(DATA_DIR, f"{name}_seed.csv")
+    df.to_csv(path, index=False)
+    print(f"[SEED] {name} → {path} ({len(df)} rows)")
+    return path
+
+def infer_sql_type(series: pd.Series):
+    if pd.api.types.is_integer_dtype(series): return "BIGINT"
+    if pd.api.types.is_float_dtype(series):   return "FLOAT"
+    if pd.api.types.is_bool_dtype(series):    return "BIT"
+    if pd.api.types.is_datetime64_any_dtype(series): return "DATETIME2"
+    return "NVARCHAR(MAX)"
+
+def create_table_from_csv(table_name, csv_path):
+    df = pd.read_csv(csv_path, nrows=500)
+    cols = []
+    for col in df.columns:
+        coltype = infer_sql_type(df[col])
+        safe_col = col.replace(" ", "_").replace("-", "_")
+        cols.append(f"[{safe_col}] {coltype} NULL")
+    ddl = f"IF OBJECT_ID('{table_name}', 'U') IS NOT NULL DROP TABLE {table_name};\n"
+    ddl += f"CREATE TABLE {table_name} (\n" + ",\n".join(cols) + "\n);"
+    with mssql_engine.connect() as conn:
+        conn.execute(text(ddl))
+    print(f"[DDL] Table {table_name} created.")
+
+def expand_and_insert(table_name, seed_df):
+    total = ROWS_PER_TABLE
+    written = 0
+    pbar = tqdm(total=total, desc=f"Loading {table_name}", unit="rows")
+
+    while written < total:
+        rows = min(CHUNK_SIZE, total - written)
+        df_chunk = seed_df.sample(n=rows, replace=True).reset_index(drop=True)
+        df_chunk.to_sql(table_name, mssql_engine,
+                        if_exists="append", index=False, chunksize=50_000)
+        written += rows
+        pbar.update(rows)
+    pbar.close()
+
+    with mssql_engine.connect() as conn:
+        cnt = conn.execute(text(f"SELECT COUNT(*) FROM {table_name}")).scalar()
+    print(f"[{table_name}] Final count {cnt}")
+
+# ---------- MAIN ----------
+def main():
+    # Step 1: Parallel fetch seeds
+    seeds = {}
+    with ThreadPoolExecutor(max_workers=THREADS) as ex:
+        futures = {ex.submit(fetch_api_json, url): name for name, url in API_ENDPOINTS.items()}
+        for fut in as_completed(futures):
+            name = futures[fut]
+            data = fut.result()
+            df = normalize_data(name, data)
+            df = df.head(SEED_ROWS)
+            seeds[name] = df
+            save_seed_csv(name, df)
+
+    # Step 2: Create tables
+    for name in seeds:
+        csv_path = os.path.join(DATA_DIR, f"{name}_seed.csv")
+        create_table_from_csv(name + "_big", csv_path)
+
+    # Step 3: Expand + Insert with progress bars
+    for name, df in seeds.items():
+        expand_and_insert(name + "_big", df)
+
+if __name__ == "__main__":
+    main()
