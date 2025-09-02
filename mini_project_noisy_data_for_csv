@@ -30,3 +30,25 @@ df.to_csv("raw_sales.csv", index=False)
 print(" Noisy dataset saved as raw_sales.csv (rows:", len(df), ")")
 
 df.head()
+
+----------------------------------------------------------
+# KNN IMPUTATION
+
+import pandas as pd
+import numpy as np
+from sklearn.impute import KNNImputer
+# Load dataset (assuming raw_sales.csv is large, we take a sample for demo)
+df = pd.read_csv("raw_sales.csv")
+print("Before Imputation (first 10 rows):\n", df.head(10))
+print("\nMissing Values Count:\n", df[['Quantity', 'Price']].isnull().sum())
+
+# Select subset for imputation
+num_cols = ['Quantity', 'Price']
+df_numeric = df[num_cols]
+imputer = KNNImputer(n_neighbors=5, weights='distance')  # k=5 neighbors, weighted by distance
+df_imputed = pd.DataFrame(imputer.fit_transform(df_numeric), columns=num_cols)
+# Replace original numeric columns with imputed ones
+df[num_cols] = df_imputed
+print("\nAfter Imputation (first 10 rows):\n", df.head(10))
+print("\nMissing Values Count (after imputation):\n", df[['Quantity', 'Price']].isnull().sum()
+
