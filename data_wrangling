@@ -1,0 +1,112 @@
+Data Wrangling with raw_sales.csv
+# Step 1: import libraries
+import pandas as pd
+import numpy as np
+
+# Load a small sample of raw_sales.csv (for demo, full file might be too big)
+df = pd.read_csv("raw_sales.csv").head(5)   # just 5 rows for demo
+print("Initial DataFrame:\n", df)
+
+Step 2: Add a row
+# Create a new row as dict
+new_row = {
+    "OrderID": 999999,
+    "Customer": "Test Customer",
+    "Product": "Laptop",
+    "Quantity": 2,
+    "Price": 1200,
+    "OrderDate": "2021-07-15",
+    "Region": "North"
+}
+# Append row
+df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+print("\nAfter Adding Row:\n", df)
+
+Step 3: Drop the same row
+df = df[df['OrderID'] != 999999]   # drop where OrderID == 999999
+print("\nAfter Dropping Row:\n", df)
+
+Step 4: Add a column
+# Add new column: Revenue = Quantity * Price
+df['Revenue'] = df['Quantity'] * pd.to_numeric(df['Price'], errors='coerce')
+print("\nAfter Adding Column (Revenue):\n", df)
+Step 5: Rename the column
+df.rename(columns={"Revenue": "TotalRevenue"}, inplace=True)
+print("\nAfter Renaming Column:\n", df)
+Step 6: Drop the column
+df.drop(columns=["TotalRevenue"], inplace=True)
+print("\nAfter Dropping Column:\n", df)
+
+Step 7: Column datatype changes
+print("\nData types before change:\n", df.dtypes)
+
+# Convert OrderDate → datetime, Quantity → int
+df['OrderDate'] = pd.to_datetime(df['OrderDate'], errors='coerce')
+df['Quantity'] = df['Quantity'].astype('Int64')  # Nullable int
+
+print("\nData types after change:\n", df.dtypes)
+
+Step 8: Typecasting (Price → float)
+df['Price'] = pd.to_numeric(df['Price'], errors='coerce').astype(float)
+print("\nAfter Typecasting Price to float:\n", df.dtypes)
+
+Step 9: Conditional construct
+# Add new column: HighValueOrder (True if Price > 700)
+df['HighValueOrder'] = np.where(df['Price'] > 700, True, False)
+print("\nAfter Conditional Construct (HighValueOrder):\n", df)
+
+# Step 10: Data Grouping & Aggregation
+# Total sales per Product
+grouped = df.groupby('Product')['Price'].sum().reset_index().rename(columns={'Price':'TotalSales'})
+print("\nTotal Sales per Product:\n", grouped)
+
+# Step 11: Subsetting & Indexing
+# Select orders from 'North' region
+north_orders = df[df['Region'] == 'North']
+print("\nNorth Region Orders:\n", north_orders)
+
+# Access specific column via indexing
+print("\nOrderID column:\n", df['OrderID'])
+
+# Step 12: String Matching
+# Filter customers with 'Test' in name
+test_customers = df[df['Customer'].str.contains('Test', na=False)]
+print("\nCustomers containing 'Test':\n", test_customers)
+
+# Step 13: Ranking & Sorting
+# Sort by Price descending
+sorted_df = df.sort_values(by='Price', ascending=False)
+print("\nSorted by Price descending:\n", sorted_df)
+
+# Add ranking column by Price
+df['PriceRank'] = df['Price'].rank(method='dense', ascending=False)
+print("\nPrice Ranking:\n", df[['OrderID','Price','PriceRank']])
+
+# Step 14: Concatenate, Merge & Joins
+# Create another small DataFrame for joining
+df_discounts = pd.DataFrame({
+    'Product': ['Laptop','Phone'],
+    'Discount': [100, 50]
+})
+# Merge with discounts
+df_merged = pd.merge(df, df_discounts, on='Product', how='left')
+print("\nAfter Merge with Discounts:\n", df_merged)
+
+# Step 15: Crosstabulation
+# Count orders per Region and Product
+ct = pd.crosstab(df['Region'], df['Product'])
+print("\nCrosstab of Region vs Product:\n", ct)
+
+# Step 16: Pivoting
+pivot = df.pivot_table(index='Region', columns='Product', values='Price', aggfunc='sum', fill_value=0)
+print("\nPivot Table (Total Price per Region/Product):\n", pivot)
+
+# Step 17: Reshaping
+# Melt pivot table back to long format
+melted = pivot.reset_index().melt(id_vars='Region', var_name='Product', value_name='TotalPrice')
+print("\nMelted Pivot Table:\n", melted)
+
+# Step 18: Load
+# Example: save cleaned/transformed data to CSV (ready for DB load)
+df_merged.to_csv('cleaned_sales.csv', index=False)
+print("\nCleaned data saved to 'cleaned_sales.csv'. Ready for database or data lake ingestion.")
