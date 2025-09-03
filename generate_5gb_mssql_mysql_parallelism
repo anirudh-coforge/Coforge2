@@ -1,0 +1,170 @@
+import time
+import numpy as np
+import pandas as pd
+from sqlalchemy import create_engine, text
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import urllib
+
+np.random.seed(42)
+
+# ---------- CONFIG ----------
+MSSQL_SERVER = "DESKTOP-6B6KT5K"
+MSSQL_DB     = "cryptodb1"
+MSSQL_DRIVER = "ODBC Driver 17 for SQL Server"
+
+ROWS_CUSTOMERS   = 5_000_000
+ROWS_ORDERS      = 8_000_000
+ROWS_PAGEVIEWS   = 12_000_000
+ROWS_PRODUCTS    = 3_000_000
+
+CHUNK_ROWS       = 200_000
+TO_SQL_CHUNKSIZE = 50_000
+
+# ---------- DB ENGINES ----------
+mssql_conn_str = (
+    f"Driver={{{MSSQL_DRIVER}}};"
+    f"Server={MSSQL_SERVER};"
+    f"Database={MSSQL_DB};"
+    "Trusted_Connection=yes;"
+)
+mssql_engine = create_engine(
+    f"mssql+pyodbc:///?odbc_connect={urllib.parse.quote_plus(mssql_conn_str)}",
+    fast_executemany=True
+)
+
+MYSQL_CONN = "mysql+pymysql://root:thinknyx%40123@localhost:3306/cryptodb"
+mysql_engine = create_engine(
+    MYSQL_CONN,
+    pool_size=5,      # max persistent connections
+    max_overflow=10,  # allow temporary extra connections
+    pool_recycle=3600
+)
+
+# ---------- DUMMY API FETCH ----------
+def fetch_crypto_dummy():
+    """Simulate API fetch for crypto_data"""
+    rows, cols = 500_000, 20  # smaller dummy for testing
+    df = pd.DataFrame(np.random.randn(rows, cols), columns=[f"col{i}" for i in range(cols)])
+    print(f"[crypto_data] Dummy API fetched: {rows} rows, {cols} cols")
+    return "crypto_data", df
+
+# ---------- SYNTHETIC TABLES ----------
+def synth_customers(n):
+    ids = np.arange(1, n + 1)
+    first = np.random.choice(["Aarav", "Vihaan", "Vivaan", "Aditya", "Arjun", "Sai"], size=n)
+    last = np.random.choice(["Sharma", "Verma", "Gupta", "Patel", "Singh"], size=n)
+    age = np.random.randint(18, 80, size=n)
+    inc = np.random.lognormal(mean=10, sigma=0.6, size=n).round(2)
+    city = np.random.choice(["Delhi","Mumbai","Bengaluru","Hyderabad"], size=n)
+    join = pd.to_datetime("2015-01-01") + pd.to_timedelta(np.random.randint(0, 365*9, size=n), unit="D")
+    email = (pd.Series(first).str.lower()+"."+pd.Series(last).str.lower()+"@example.com")
+    note = np.random.choice(["VIP","REGULAR","",""], size=n)
+    return pd.DataFrame({
+        "customer_id": ids, "first_name": first, "last_name": last,
+        "age": age, "annual_income": inc, "city": city, "joined_at": join,
+        "email": email, "notes": note
+    })
+
+def synth_orders(n, customer_id_range):
+    ids = np.arange(1, n + 1)
+    cust = np.random.randint(1, customer_id_range + 1, size=n)
+    order_date = pd.to_datetime("2018-01-01") + pd.to_timedelta(np.random.randint(0, 365*7, size=n), unit="D")
+    amount = np.random.gamma(3.0, 2000, size=n).round(2)
+    status = np.random.choice(["NEW","PAID","SHIPPED","CANCELLED","REFUNDED"], size=n)
+    channel = np.random.choice(["WEB","APP","STORE"], size=n)
+    return pd.DataFrame({
+        "order_id": ids, "customer_id": cust, "order_date": order_date,
+        "amount": amount, "status": status, "channel": channel
+    })
+
+def synth_pageviews(n, customer_id_range):
+    pv_id = np.arange(1, n + 1)
+    cust = np.random.randint(1, customer_id_range + 1, size=n)
+    ts = pd.to_datetime("2020-01-01") + pd.to_timedelta(np.random.randint(0, 365*4*24*60, size=n), unit="m")
+    page = np.random.choice(["/","/home","/product","/search","/cart"], size=n)
+    ref = np.random.choice(["direct","google","bing","email"], size=n)
+    dur = np.random.exponential(scale=60, size=n).round(2)
+    dev = np.random.choice(["mobile","desktop","tablet"], size=n)
+    return pd.DataFrame({
+        "view_id": pv_id, "customer_id": cust, "ts": ts,
+        "page": page, "referrer": ref, "duration_sec": dur, "device": dev
+    })
+
+def synth_products(n):
+    pid = np.arange(1, n + 1)
+    cat = np.random.choice(["Books","Electronics","Clothing","Grocery"], size=n)
+    price = np.random.lognormal(mean=4, sigma=0.5, size=n).round(2)
+    stock = np.random.randint(0, 5000, size=n)
+    rating = np.clip(np.random.normal(4.0, 0.6, size=n), 1, 5).round(2)
+    title = "Product-" + pd.Series(pid).astype(str)
+    desc = np.random.choice(["Good","Popular","New","Bestseller"], size=n)
+    return pd.DataFrame({
+        "product_id": pid, "category": cat, "price": price,
+        "stock": stock, "rating": rating, "title": title, "tag": desc
+    })
+
+# ---------- CHUNKED WRITE ----------
+def write_table_mssql(table_name, df_generator, total_rows, *args):
+    first = True
+    written = 0
+    while written < total_rows:
+        rows = min(CHUNK_ROWS, total_rows - written)
+        df = df_generator(rows, *args) if args else df_generator(rows)
+        df.to_sql(table_name, mssql_engine, if_exists="replace" if first else "append",
+                  index=False, chunksize=TO_SQL_CHUNKSIZE)
+        written += rows
+        first = False
+        print(f"[{table_name}] Wrote {rows} rows (total {written}/{total_rows})")
+    with mssql_engine.connect() as conn:
+        cnt = conn.execute(text(f"SELECT COUNT(*) FROM {table_name}")).scalar()
+        print(f"[{table_name}] Final row count: {cnt}")
+
+# ---------- MIGRATE TO MYSQL ----------
+def migrate_table_mysql(table_name):
+    with mssql_engine.connect() as conn:
+        for chunk in pd.read_sql(f"SELECT * FROM {table_name}", conn, chunksize=TO_SQL_CHUNKSIZE):
+            chunk.to_sql(table_name, mysql_engine, if_exists="append", index=False, method="multi")
+    print(f"[{table_name}] migrated to MySQL")
+
+# ---------- MAIN ----------
+def main():
+    tables = []
+
+    # 1) Crypto table from dummy API
+    tables.append(fetch_crypto_dummy())
+
+    # 2) Synthetic tables
+    tables.append(("customers_big", synth_customers, ROWS_CUSTOMERS))
+    tables.append(("orders_big", synth_orders, ROWS_ORDERS, ROWS_CUSTOMERS))
+    tables.append(("pageviews_big", synth_pageviews, ROWS_PAGEVIEWS, ROWS_CUSTOMERS))
+    tables.append(("products_big", synth_products, ROWS_PRODUCTS))
+
+    # ---------- Parallel store into MS SQL ----------
+    print("Storing tables into MS SQL...")
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        futures = []
+        for t in tables:
+            if len(t) == 2:  # API fetched df
+                df = t[1]
+                futures.append(executor.submit(lambda df=df, name=t[0]: df.to_sql(name, mssql_engine,
+                                        if_exists="replace", index=False, chunksize=TO_SQL_CHUNKSIZE)))
+            else:  # synthetic generator
+                futures.append(executor.submit(write_table_mssql, t[0], t[1], t[2], *t[3:]))
+
+        for f in as_completed(futures):
+            f.result()
+    from sqlalchemy import text
+
+    with mysql_engine.connect() as conn:
+        conn.execute(text("CREATE DATABASE IF NOT EXISTS cryptodb"))
+        conn.execute(text("USE cryptodb"))
+
+    # ---------- Sequential migrate to MySQL (safe) ----------
+    print("Migrating tables to MySQL...")
+    for t in tables:
+        migrate_table_mysql(t[0])
+
+    print("All tables stored and migrated successfully.")
+
+if __name__ == "__main__":
+    main()
