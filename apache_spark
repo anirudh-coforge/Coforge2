@@ -1,0 +1,14 @@
+from pyspark.sql import SparkSession
+
+spark = SparkSession.builder \
+    .appName("LocalSparkDemo") \
+    .master("local[*]") \
+    .getOrCreate()
+
+print(spark.version)
+
+
+data = [("Alice", 25), ("Bob", 30), ("Charlie", 28)]
+columns = ["Name", "Age"]
+df = spark.createDataFrame(data, schema=columns)
+df.show()
