@@ -12,3 +12,16 @@ data = [("Alice", 25), ("Bob", 30), ("Charlie", 28)]
 columns = ["Name", "Age"]
 df = spark.createDataFrame(data, schema=columns)
 df.show()
+
+
+from pyspark.sql import SparkSession
+spark = SparkSession.builder.appName("RDDExample").master("local[*]").getOrCreate()
+sc = spark.sparkContext  # SparkContext for RDDs
+# Create RDD from a list
+data = [1, 2, 3, 4, 5]
+rdd = sc.parallelize(data)
+# Apply a transformation
+rdd_squared = rdd.map(lambda x: x**2)
+# Action to collect results
+print(rdd_squared.collect())  # Output: [1, 4, 9, 16, 25]
+
