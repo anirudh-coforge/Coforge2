@@ -38,3 +38,52 @@ plt.xlabel("Trip Distance")
 plt.ylabel("Fare Amount")
 plt.title("Fare vs Distance (Sample 5k)")
 plt.show()
+
+
+------------------------------------------------------------
+
+Dataset Used
+We’ll use NYC Yellow Taxi dataset (public dataset).
+•	Link: https://www.nyc.gov/assets/tlc/downloads/pdf/trip_record_data_dictionary.pdf
+•	Sample file: yellow_tripdata_2024-01.csv
+Download it and place in your working directory (e.g., C:\sparkdata\yellow_tripdata_2024-01.csv).
+
+5. Example Code (with Imports Included)
+from pyspark import SparkContext
+from pyspark.sql import SparkSession, functions as F
+from pyspark.ml.feature import VectorAssembler
+from pyspark.ml.regression import LinearRegression
+import findspark
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# Initialize findspark
+findspark.init()
+
+# Start SparkSession
+spark = SparkSession.builder.appName("NYC Taxi Demo").getOrCreate()
+
+# 1. Load dataset
+df = spark.read.csv("C:/sparkdata/yellow_tripdata_2024-01.csv", header=True, inferSchema=True)
+
+# 2. Clean data
+df_clean = df.filter((df.fare_amount > 0) & (df.trip_distance > 0))
+
+# 3. Basic Transformations
+df_clean = df_clean.withColumn("fare_per_mile", df_clean.fare_amount / (df_clean.trip_distance + 0.1))
+
+# 4. Aggregation
+agg_df = df_clean.groupBy("passenger_count").avg("trip_distance", "fare_amount")
+agg_df.show()
+
+# 5. Machine Learning (Predict tips)
+assembler = VectorAssembler(inputCols=["trip_distance", "fare_amount"], outputCol="features")
+data_ml = assembler.transform(df_clean.select("trip_distance", "fare_amount", "tip_amount").na.drop())
+
+train, test = data_ml.randomSplit([0.7, 0.3])
+lr = LinearRegression(featuresCol="features", labelCol="tip_amount")
+model = lr.fit(train)
+
+print("Model Coefficients:", model.coefficients)
+print("Model Intercept:", model.intercept)
+
