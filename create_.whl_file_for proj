@@ -13,7 +13,7 @@ Houston,33,70,
 Houston,35,69,15
 Miami,32,80,14
 Miami,31,82,13
-Miami,,81,12
+Miami,81,12
 
 city_weather_project/
 ├── city_weather/                 # Package folder
