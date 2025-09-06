@@ -1,0 +1,14 @@
+Step 1: Prepare Project Directory
+Choose a working folder (example: airflow_project):
+mkdir airflow_project && cd airflow_project
+Inside it we will create:
+airflow_project/
+├── dags/                  # your DAG files go here
+│    └── example_dag.py     # sample DAG
+├── spark_jobs/            # PySpark ETL scripts
+│       └── etl_yellow_taxi.py
+├── mysql_data/            # volume mount for MySQL database files
+├── docker-compose.yaml    # main docker compose file
+├── .env                   # environment variables (Airflow + MySQL)
+└── requirements.txt       # optional, extra python packages for Airflow
+ You must create all these directories and files.
