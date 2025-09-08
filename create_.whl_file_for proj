@@ -153,3 +153,409 @@ You've now created a real-time Python project that:
 •	Packages the project into a .whl file for distribution.
 •	Provides a command-line interface for easy usage.
 This project demonstrates how to handle large datasets, perform data aggregation, and visualize the results, all while maintaining a clean and modular codebase.
+
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Second example
+
+Project Structure
+city_weather_project/
+├── city_weather/
+│              ├── __init__.py
+│              ├── cli.py
+│              ├── data_handler.py
+│              ├── weather.py
+├── data/
+│         └── city_weather.csv
+ ── setup.py
+└── README.md
+
+ Step 1: Install Required Libraries
+Ensure you have the necessary Python libraries installed:
+pip install pandas numpy matplotlib seaborn
+
+ Step 2: Create the Data Handler Module
+city_weather/data_handler.py:
+import pandas as pd
+
+def load_csv(file_path):
+    """Load CSV into pandas DataFrame"""
+    return pd.read_csv(file_path)
+
+def clean_data(df):
+    """Handle missing values and remove duplicates"""
+    df = df.drop_duplicates()
+    df = df.fillna(df.mean())
+    return df
+
+ Step 3: Create the Weather Processing Module
+city_weather/weather.py:
+import pandas as pd
+
+def group_by_city(df):
+    """Group data by city and compute aggregate statistics"""
+    return df.groupby('City').agg({
+        'Temperature': ['mean', 'max', 'min'],
+        'Humidity': ['mean', 'max', 'min'],
+        'Wind Speed': ['mean', 'max', 'min']
+    }).reset_index()
+
+ Step 4: Create the Command-Line Interface (CLI)
+city_weather/cli.py:
+import argparse
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+from .data_handler import load_csv, clean_data
+from .weather import group_by_city
+
+def main():
+    parser = argparse.ArgumentParser(description="Process city weather data")
+    parser.add_argument('--file', type=str, required=True, help="Path to the CSV file")
+    parser.add_argument('--output', type=str, help="Path to save the processed CSV")
+    args = parser.parse_args()
+
+    # Load and clean data
+    df = load_csv(args.file)
+    df = clean_data(df)
+
+    # Group by city and compute statistics
+    city_stats = group_by_city(df)
+
+    # Save the processed data if an output path is provided
+    if args.output:
+        city_stats.to_csv(args.output, index=False)
+
+    # Visualize the data
+    plt.figure(figsize=(10, 6))
+    sns.barplot(x='City', y=('Temperature', 'mean'), data=city_stats)
+    plt.xticks(rotation=90)
+    plt.title('Average Temperature by City')
+    plt.tight_layout()
+    plt.show()
+
+if __name__ == "__main__":
+    main()
+
+ Step 5: Create the setup.py File
+setup.py:
+from setuptools import setup, find_packages
+
+setup(
+    name="city_weather",
+    version="0.1.0",
+    packages=find_packages(),
+    install_requires=[
+        "pandas",
+        "numpy",
+        "matplotlib",
+        "seaborn"
+    ],
+    entry_points={
+        "console_scripts": [
+            "city_weather=city_weather.cli:main"
+        ]
+    }
+)
+
+Step 6: Build the Package
+From the project root directory, run:
+python setup.py sdist bdist_wheel
+This will generate distribution archives in the dist/ directory.
+
+ Step 7: Install the Package Locally
+Install the package using pip:
+pip install dist/city_weather-0.1.0-py3-none-any.whl
+
+ Step 8: Run the CLI Tool
+Now, you can run the CLI tool from the command line:
+city_weather --file data/city_weather.csv --output data/processed_weather.csv
+This command will:
+•	Load the weather data from data/city_weather.csv.
+•	Clean the data by handling missing values and duplicates.
+•	Group the data by city and compute aggregate statistics.
+•	Save the processed data to data/processed_weather.csv.
+•	Display a bar plot of the average temperature by city.
+
+The CLI tool will generate a bar plot showing the average temperature by city. Here's an example of what the plot might look like:
+
+You've now created a real-time Python project that:
+•	Loads and cleans a large dataset from a CSV file.
+•	Groups the data by city and computes aggregate statistics.
+•	Visualizes the data using a bar plot.
+•	Packages the project into a .whl file for distribution.
+•	Provides a command-line interface for easy usage.
+This project demonstrates how to handle large datasets, perform data aggregation, and visualize the results, all while maintaining a clean and modular codebase.
+
+-----------------------------------------------------------------------------------------------------
+The dist/ folder doesn’t exist by default in your project. It is created when you build your package using setuptools. This is where your .whl and .tar.gz files will be placed.
+Here’s how to create it step by step:
+
+1 Make sure your project has setup.py:
+Example setup.py for your project:
+from setuptools import setup, find_packages
+
+setup(
+    name="city_weather_project",
+    version="0.1",
+    packages=find_packages(),
+    include_package_data=True,
+    install_requires=[
+        "pandas",
+        "numpy",
+    ],
+    entry_points={
+        "console_scripts": [
+            "cityweather=city_weather.cli:main",
+        ],
+    },
+    author="Your Name",
+    description="A project to handle and visualize city weather data",
+)
+
+2 Install build tools (if not already):
+pip install --upgrade build
+
+3 Build the package:
+From the root of your project (city_weather_project/):
+python -m build
+•	This will create two folders:
+o	dist/ → contains .whl and .tar.gz files
+o	build/ → temporary build files
+
+4 Check the dist/ folder:
+ls dist/
+You should see something like:
+city_weather_project-0.1-py3-none-any.whl
+city_weather_project-0.1.tar.gz
+
+After this, your .whl file is ready to install using:
+pip install dist/city_weather_project-0.1-py3-none-any.whl
+---------------------------------------------------------------
+create a Real-time Employee Salary Processing Package that can:
+1.	Load employee data from CSV
+2.	Handle missing values and duplicates
+3.	Add bonus and normalized salary
+4.	Save the processed data
+
+Step 1: Create Project Folder
+Create the folder structure:
+employee_project/
+├── employee_utils/       # Python module
+│   ├── __init__.py
+│   ├── salary.py
+│   └── data_handler.py
+├── sample_data/          # Sample CSV for testing
+│   └── employees.csv
+├── setup.py
+└── README.md
+
+Step 2: Create Sample CSV
+sample_data/employees.csv:
+id,name,department,salary
+1,John,IT,50000
+2,Alice,HR,60000
+3,Bob,Finance,55000
+4,Carol,IT,NaN
+5,Dave,HR,70000
+6,Eve,Finance,50000
+7,Frank,IT,120000
+8,Grace,HR,65000
+9,Hank,Finance,NaN
+10,Ivy,IT,80000
+
+Step 3: Write Data Handling Module
+employee_utils/data_handler.py:
+import pandas as pd
+import numpy as np
+
+def load_csv(file_path):
+    """Load CSV into pandas DataFrame"""
+    return pd.read_csv(file_path)
+
+def clean_data(df):
+    """Handle missing values and remove duplicates"""
+    df = df.drop_duplicates()
+    df['salary'] = df['salary'].fillna(df['salary'].mean())
+    return df
+
+def remove_outliers(df, column='salary'):
+    """Remove outliers beyond 3 standard deviations"""
+    mean = df[column].mean()
+    std = df[column].std()
+    df = df[(df[column] >= mean - 3*std) & (df[column] <= mean + 3*std)]
+    return df
+
+Step 4: Write Salary Processing Module
+employee_utils/salary.py:
+import numpy as np
+
+def add_bonus(df, percentage=10):
+    df = df.copy()
+    df['bonus'] = df['salary'] * (percentage / 100)
+    return df
+
+def normalize_salary(df):
+    df = df.copy()
+    df['salary_normalized'] = (df['salary'] - df['salary'].mean()) / df['salary'].std()
+    return df
+
+def process_salary(df, bonus_percentage=10):
+    df = add_bonus(df, bonus_percentage)
+    df = normalize_salary(df)
+    return df
+
+Step 5: Init Module
+employee_utils/__init__.py:
+from .salary import add_bonus, normalize_salary, process_salary
+from .data_handler import load_csv, clean_data, remove_outliers
+
+Step 6: Setup File
+setup.py:
+from setuptools import setup, find_packages
+
+setup(
+    name="employee_utils",
+    version="0.1.0",
+    packages=find_packages(),
+    install_requires=[
+        "pandas",
+        "numpy"
+    ],
+    author="Your Name",
+    description="Real-time employee salary processing package",
+    python_requires=">=3.7",
+)
+
+Step 7: Build Wheel File
+Install build tools:
+pip install --upgrade setuptools wheel
+Build .whl:
+python setup.py bdist_wheel
+Output: dist/employee_utils-0.1.0-py3-none-any.whl
+
+Step 8: Install Wheel
+pip install dist/employee_utils-0.1.0-py3-none-any.whl
+
+Step 9: Test the Package
+Create test_script.py:
+from employee_utils import load_csv, clean_data, remove_outliers, process_salary
+
+# Load CSV
+df = load_csv('sample_data/employees.csv')
+
+# Clean data
+df = clean_data(df)
+
+# Remove outliers
+df = remove_outliers(df)
+
+# Process salary
+df = process_salary(df, bonus_percentage=15)
+
+# Display results
+print(df)
+Expected Output:
+   id   name department   salary    bonus  salary_normalized
+0   1   John        IT   50000   7500.0         -0.851...
+1   2  Alice        HR   60000   9000.0          0.170...
+2   3    Bob    Finance   55000   8250.0         -0.340...
+...
+
+ Now you have a full end-to-end real-time project:
+•	Data input (CSV)
+•	Cleaning & transformation
+•	Salary calculation
+•	Packaged as .whl for installation
+
+ create a real-time CLI version, run:
+python -m employee_utils process --file sample_data/employees.csv --bonus 12
+to get result automatically.
+
+Step 10: Add CLI Entry Point
+Create a new file inside employee_utils/ called cli.py:
+import argparse
+from .data_handler import load_csv, clean_data, remove_outliers
+from .salary import process_salary
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Real-time Employee Salary Processing"
+    )
+    parser.add_argument(
+        "--file", type=str, required=True, help="Path to the CSV file"
+    )
+    parser.add_argument(
+        "--bonus", type=float, default=10, help="Bonus percentage to apply"
+    )
+    parser.add_argument(
+        "--out_file", type=str, default=None, help="Path to save the processed CSV"
+    )
+
+    args = parser.parse_args()
+
+    # Step 1: Load CSV
+    df = load_csv(args.file)
+
+    # Step 2: Clean data
+    df = clean_data(df)
+
+    # Step 3: Remove outliers
+    df = remove_outliers(df)
+
+    # Step 4: Process salary
+    df = process_salary(df, bonus_percentage=args.bonus)
+
+    # Step 5: Show top 10 rows
+    print("\nProcessed Data (Top 10 Rows):")
+    print(df.head(10))
+
+    # Step 6: Save to CSV if requested
+    if args.out_file:
+        df.to_csv(args.out_file, index=False)
+        print(f"\nProcessed data saved to: {args.out_file}")
+
+if __name__ == "__main__":
+    main()
+
+Step 11: Update setup.py for CLI Entry Point
+Modify setup.py to include a console_scripts entry:
+from setuptools import setup, find_packages
+
+setup(
+    name="employee_utils",
+    version="0.2.0",
+    packages=find_packages(),
+    install_requires=[
+        "pandas",
+        "numpy"
+    ],
+    author="Your Name",
+    description="Real-time employee salary processing package with CLI",
+    python_requires=">=3.7",
+    entry_points={
+        "console_scripts": [
+            "employee_process=employee_utils.cli:main"
+        ]
+    }
+)
+
+Step 12: Rebuild Wheel
+python setup.py bdist_wheel
+This will produce: dist/employee_utils-0.2.0-py3-none-any.whl.
+
+Step 13: Install Updated Package
+pip install --upgrade dist/employee_utils-0.2.0-py3-none-any.whl
+
+Step 14: Run the CLI Tool
+Example usage:
+employee_process --file sample_data/employees.csv --bonus 12 --out_file processed_employees.csv
+Output:
+Processed Data (Top 10 Rows):
+   id   name department   salary   bonus  salary_normalized
+0   1   John        IT   50000   6000.0        -0.85...
+1   2  Alice        HR   60000   7200.0         0.17...
+...
+Processed data saved to: processed_employees.csv
+
+
