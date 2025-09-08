@@ -13,37 +13,7 @@ airflow_project/
 └── requirements.txt       # optional, extra python packages for Airflow
  You must create all these directories and files.
 
-Step 2: Create .env
-airflow_project/.env
-# -------------------------
-# Airflow Config
-# -------------------------
-AIRFLOW_UID=50000
-AIRFLOW_GID=0
-
-# Generate with:
-# python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-AIRFLOW__CORE__FERNET_KEY=YOUR_FERNET_KEY_HERE
-
-# -------------------------
-# Airflow Admin User
-# -------------------------
-_AIRFLOW_WWW_USER_USERNAME=airflow
-_AIRFLOW_WWW_USER_PASSWORD=airflow
-
-# -------------------------
-# MySQL Config (used by Airflow)
-# -------------------------
-MYSQL_HOST=mysql
-MYSQL_PORT=3306
-MYSQL_USER=airflow
-MYSQL_PASSWORD=airflow
-MYSQL_DB=airflow_db
-
- Step 3: Create docker-compose.yaml
-airflow_project/docker-compose.yaml
-version: "3.9"
-
+#docker-compose.yaml
 x-airflow-common: &airflow-common
   image: apache/airflow:2.8.1
   env_file:
@@ -54,7 +24,8 @@ x-airflow-common: &airflow-common
     - ./requirements.txt:/requirements.txt
   user: "${AIRFLOW_UID}:${AIRFLOW_GID}"
   depends_on:
-    - mysql
+    mysql:
+      condition: service_healthy   # ✅ wait until mysql is healthy
 
 services:
   mysql:
@@ -69,9 +40,10 @@ services:
       - "3306:3306"
     volumes:
       - ./mysql_data:/var/lib/mysql
-    healthcheck:
+    healthcheck:   # ✅ ensures MySQL is ready before Airflow runs
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 10s
+      timeout: 5s
       retries: 5
 
   airflow-init:
@@ -88,79 +60,54 @@ services:
           --role Admin \
           --email admin@example.com \
           --password ${_AIRFLOW_WWW_USER_PASSWORD}
+    depends_on:
+      mysql:
+        condition: service_healthy   # ✅ ensure MySQL is ready
 
   airflow-webserver:
     <<: *airflow-common
     command: webserver
     ports:
       - "8080:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
 
   airflow-scheduler:
     <<: *airflow-common
     command: scheduler
+    depends_on:
+      mysql:
+        condition: service_healthy
 
- Step 4: Create requirements.txt
-For Spark + MySQL support:
-airflow_project/requirements.txt
+  spark-master:
+    image: bitnami/spark:3.5.0
+    container_name: spark-master
+    environment:
+      - SPARK_MODE=master
+    ports:
+      - "7077:7077"
+      - "8081:8080"
+    volumes:
+      - ./spark_jobs:/opt/spark_jobs
+
+  spark-worker:
+    image: bitnami/spark:3.5.0
+    container_name: spark-worker
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+    depends_on:
+      - spark-master
+    volumes:
+      - ./spark_jobs:/opt/spark_jobs
+
+
+--------------------------------------------------------------
+#requirements.txt 
 pyspark
 pandas
 mysql-connector-python
 sqlalchemy
-
-Step 5: Create a Sample DAG
-airflow_project/dags/example_dag.py
-from airflow import DAG
-from airflow.operators.bash import BashOperator
-from airflow.operators.python import PythonOperator
-from airflow.utils.dates import days_ago
-from datetime import timedelta
-
-def notify_success(**kwargs):
-    print("DAG executed successfully!")
-
-default_args = {
-    "owner": "airflow",
-    "depends_on_past": False,
-    "retries": 1,
-    "retry_delay": timedelta(minutes=2),
-}
-
-with DAG(
-    dag_id="example_mysql_dag",
-    default_args=default_args,
-    description="Simple DAG to test Airflow + MySQL setup",
-    schedule_interval="@daily",
-    start_date=days_ago(1),
-    catchup=False,
-) as dag:
-
-    t1 = BashOperator(
-        task_id="print_date",
-        bash_command="date"
-    )
-
-    t2 = PythonOperator(
-        task_id="notify",
-        python_callable=notify_success,
-    )
-
-    t1 >> t2
-
- Step 6: Initialize and Start Airflow
-1.	Start MySQL + init DB:
-2.	docker-compose up airflow-init
-This will initialize the Airflow metadata DB in MySQL and create the admin user.
-3.	Bring up all services:
-4.	docker-compose up -d
-5.	Access Airflow UI:
-o	URL: http://localhost:8080
-o	User: airflow
-o	Pass: airflow
-
-Step 7: Verify MySQL Connection
-Inside Airflow container:
-docker exec -it airflow_project-airflow-webserver-1 bash
-airflow db check
-
-
+requests
 
