@@ -1,0 +1,196 @@
+Module 9: Advanced SQL
+We’ll use the following example table:
+Sales Table
+CREATE TABLE Sales (
+    id INT,
+    region VARCHAR(20),
+    product VARCHAR(20),
+    quantity INT,
+    amount DECIMAL(10,2)
+);
+
+INSERT INTO Sales VALUES
+(1, 'North', 'Laptop', 2, 2000),
+(2, 'North', 'Phone', 5, 2500),
+(3, 'South', 'Laptop', 3, 3000),
+(4, 'South', 'Phone', 2, 1000),
+(5, 'East',  'Laptop', 4, 4000),
+(6, 'East',  'Phone', 3, 1500),
+(7, 'West',  'Laptop', 1, 1000),
+(8, 'West',  'Phone', 6, 3000);
+This table contains sales records by region and product.
+
+9.1 Correlated Subquery
+A correlated subquery references columns from the outer query.
+ Example: Find sales greater than the average sales in their region.
+SELECT s1.region, s1.product, s1.amount
+FROM Sales s1
+WHERE s1.amount > (
+    SELECT AVG(s2.amount)
+    FROM Sales s2
+    WHERE s2.region = s1.region
+);
+Explanation:
+•	For each row in s1, SQL calculates average amount in the same region using s2.
+•	Only rows above the regional average are returned.
+
+Using EXISTS with Correlated Subquery
+ Example: Get regions that sold both Laptop and Phone.
+SELECT DISTINCT s1.region
+FROM Sales s1
+WHERE EXISTS (
+    SELECT 1
+    FROM Sales s2
+    WHERE s1.region = s2.region AND s2.product = 'Laptop'
+)
+AND EXISTS (
+    SELECT 1
+    FROM Sales s3
+    WHERE s1.region = s3.region AND s3.product = 'Phone'
+);
+Output:
+North
+South
+East
+West
+(All regions sell both products in this dataset.)
+
+Using UNION Query
+ Example: List all regions and all products (separately).
+SELECT DISTINCT region AS item FROM Sales
+UNION
+SELECT DISTINCT product FROM Sales;
+Output:
+North
+South
+East
+West
+Laptop
+Phone
+
+Grouping Sets
+GROUPING SETS lets you define multiple groupings in one query.
+ Example: Show total sales by region, by product, and overall.
+SELECT region, product, SUM(amount) AS total_sales
+FROM Sales
+GROUP BY GROUPING SETS ((region), (product), ());
+Output:
+region   product   total_sales
+North    NULL      4500
+South    NULL      4000
+East     NULL      5500
+West     NULL      4000
+NULL     Laptop    10000
+NULL     Phone     8000
+NULL     NULL      18000
+
+ROLLUP
+ROLLUP generates subtotals hierarchically.
+ Example: Subtotal sales by region and then grand total.
+SELECT region, product, SUM(amount) AS total_sales
+FROM Sales
+GROUP BY ROLLUP(region, product);
+Output:
+region   product   total_sales
+North    Laptop    2000
+North    Phone     2500
+North    NULL      4500
+South    Laptop    3000
+South    Phone     1000
+South    NULL      4000
+East     Laptop    4000
+East     Phone     1500
+East     NULL      5500
+West     Laptop    1000
+West     Phone     3000
+West     NULL      4000
+NULL     NULL      18000
+
+CUBE
+CUBE generates all combinations of groupings.
+ Example: Get sales by region, product, and all combinations.
+SELECT region, product, SUM(amount) AS total_sales
+FROM Sales
+GROUP BY CUBE(region, product);
+Output (partial):
+region   product   total_sales
+North    Laptop    2000
+North    Phone     2500
+North    NULL      4500
+South    Laptop    3000
+South    Phone     1000
+South    NULL      4000
+East     Laptop    4000
+East     Phone     1500
+East     NULL      5500
+West     Laptop    1000
+West     Phone     3000
+West     NULL      4000
+NULL     Laptop    10000
+NULL     Phone     8000
+NULL     NULL      18000
+
+Partial CUBE
+ Example: Get totals for combinations of region only and (region, product).
+SELECT region, product, SUM(amount) AS total_sales
+FROM Sales
+GROUP BY CUBE(region, product)
+HAVING region IS NOT NULL;
+Output (partial):
+region   product   total_sales
+North    Laptop    2000
+North    Phone     2500
+North    NULL      4500
+South    Laptop    3000
+South    Phone     1000
+South    NULL      4000
+...
+
+RANK
+ Example: Rank products by sales in each region.
+SELECT region, product, amount,
+       RANK() OVER (PARTITION BY region ORDER BY amount DESC) AS rank_in_region
+FROM Sales;
+Output:
+region   product   amount   rank_in_region
+North    Phone     2500     1
+North    Laptop    2000     2
+South    Laptop    3000     1
+South    Phone     1000     2
+...
+
+CTE (Common Table Expression)
+ Example: Use a CTE to filter first, then aggregate.
+WITH HighSales AS (
+    SELECT * FROM Sales WHERE amount > 2000
+)
+SELECT region, SUM(amount) AS total_high_sales
+FROM HighSales
+GROUP BY region;
+Output:
+region   total_high_sales
+North    2500
+South    3000
+East     4000
+West     3000
+
+Indexes
+Indexes make lookups faster.
+CREATE INDEX idx_region_product ON Sales(region, product);
+Now queries filtering by region & product run faster.
+
+Triggers
+Triggers automate actions after insert/update/delete.
+ Example: Audit table for Sales inserts.
+CREATE TABLE Sales_Audit (
+    id INT,
+    action VARCHAR(20),
+    action_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TRIGGER trg_sales_insert
+AFTER INSERT ON Sales
+FOR EACH ROW
+INSERT INTO Sales_Audit(id, action) VALUES (NEW.id, 'INSERT');
+Whenever a new row is inserted into Sales, an audit entry is recorded.
+
