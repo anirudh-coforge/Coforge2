@@ -12,3 +12,233 @@ airflow_project/
 ├── .env                   # environment variables (Airflow + MySQL)
 └── requirements.txt       # optional, extra python packages for Airflow
  You must create all these directories and files.
+
+#docker-compose.yaml
+x-airflow-common: &airflow-common
+  image: apache/airflow:2.8.1
+  env_file:
+    - .env
+  volumes:
+    - ./dags:/opt/airflow/dags
+    - ./spark_jobs:/opt/airflow/spark_jobs
+    - ./requirements.txt:/requirements.txt
+  user: "${AIRFLOW_UID}:${AIRFLOW_GID}"
+  depends_on:
+    mysql:
+      condition: service_healthy   # wait until mysql is healthy
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: mysql_airflow
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: ${MYSQL_DB}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./mysql_data:/var/lib/mysql
+    healthcheck:   # ensures MySQL is ready before Airflow runs
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  airflow-init:
+    <<: *airflow-common
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        pip install --no-cache-dir -r /requirements.txt
+        airflow db init
+        airflow users create \
+          --username ${_AIRFLOW_WWW_USER_USERNAME} \
+          --firstname Admin --lastname User \
+          --role Admin \
+          --email admin@example.com \
+          --password ${_AIRFLOW_WWW_USER_PASSWORD}
+    depends_on:
+      mysql:
+        condition: service_healthy   #  ensure MySQL is ready
+
+  airflow-webserver:
+    <<: *airflow-common
+    command: webserver
+    ports:
+      - "8080:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  airflow-scheduler:
+    <<: *airflow-common
+    command: scheduler
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  spark-master:
+    image: bitnami/spark:3.5.0
+    container_name: spark-master
+    environment:
+      - SPARK_MODE=master
+    ports:
+      - "7077:7077"
+      - "8081:8080"
+    volumes:
+      - ./spark_jobs:/opt/spark_jobs
+
+  spark-worker:
+    image: bitnami/spark:3.5.0
+    container_name: spark-worker
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+    depends_on:
+      - spark-master
+    volumes:
+      - ./spark_jobs:/opt/spark_jobs
+
+
+--------------------------------------------------------------
+#requirements.txt 
+pyspark
+pandas
+mysql-connector-python
+sqlalchemy
+requests
+
+-----------------------------------------------------
+#etl_yellow_taxi.py
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import col, to_date
+import sys
+
+def main(input_path, mysql_url, mysql_user, mysql_password):
+    spark = SparkSession.builder \
+        .appName("YellowTaxiETL") \
+        .getOrCreate()
+
+    # Load CSV
+    df = spark.read.option("header", True).csv(input_path)
+
+    # Basic cleaning
+    df = df.withColumn("tpep_pickup_datetime", to_date(col("tpep_pickup_datetime"))) \
+           .withColumn("tpep_dropoff_datetime", to_date(col("tpep_dropoff_datetime")))
+
+    # Example filter: only trips with fare > 0
+    df = df.filter(col("fare_amount") > 0)
+
+    # Write to MySQL (Spark will create the table if it doesn't exist)
+    df.write.format("jdbc") \
+        .option("url", mysql_url) \
+        .option("dbtable", "yellow_taxi_trips") \
+        .option("user", mysql_user) \
+        .option("password", mysql_password) \
+        .option("driver", "com.mysql.cj.jdbc.Driver") \
+        .option("createTableColumnTypes",
+                "VendorID INT, "
+                "tpep_pickup_datetime DATE, "
+                "tpep_dropoff_datetime DATE, "
+                "passenger_count INT, "
+                "trip_distance DOUBLE, "
+                "payment_type INT, "
+                "fare_amount DOUBLE") \
+        .mode("overwrite") \
+        .save()
+
+    spark.stop()
+
+if __name__ == "__main__":
+    input_path = sys.argv[1]
+    mysql_url = sys.argv[2]
+    mysql_user = sys.argv[3]
+    mysql_password = sys.argv[4]
+    main(input_path, mysql_url, mysql_user, mysql_password)
+
+
+
+---------------------------------------------------------------------------------
+#yellow_taxi_dag.py
+from airflow import DAG
+from airflow.operators.bash import BashOperator
+from airflow.operators.python import PythonOperator
+from airflow.utils.dates import days_ago
+from datetime import timedelta
+import requests
+
+# Function to download the latest yellow taxi data
+def fetch_yellow_taxi_data(**kwargs):
+    url = "https://s3.amazonaws.com/nyc-tlc/trip+data/yellow_tripdata_2019-01.csv"
+    output_path = "/opt/airflow/spark_jobs/yellow_tripdata.csv"
+    response = requests.get(url, stream=True)
+    with open(output_path, "wb") as f:
+        for chunk in response.iter_content(chunk_size=1024*1024):
+            f.write(chunk)
+    print(f"Downloaded dataset to {output_path}")
+
+default_args = {
+    "owner": "airflow",
+    "depends_on_past": False,
+    "retries": 1,
+    "retry_delay": timedelta(minutes=2),
+}
+
+with DAG(
+    dag_id="yellow_taxi_pipeline",
+    default_args=default_args,
+    description="ETL pipeline for NYC Yellow Taxi data",
+    schedule_interval="@daily",
+    start_date=days_ago(1),
+    catchup=False,
+) as dag:
+
+    # Task 1: Download dataset
+    download_task = PythonOperator(
+        task_id="download_data",
+        python_callable=fetch_yellow_taxi_data,
+    )
+
+    # Task 2: Run Spark ETL
+    etl_task = BashOperator(
+        task_id="spark_etl",
+        bash_command=(
+            "spark-submit --master spark://spark-master:7077 "
+            "--jars /opt/airflow/spark_jobs/mysql-connector-j-8.0.33.jar "
+            "/opt/airflow/spark_jobs/etl_yellow_taxi.py "
+            "/opt/airflow/spark_jobs/yellow_tripdata.csv "
+            "jdbc:mysql://mysql:3306/airflow_db "
+            "airflow airflow"
+        ),
+    )
+
+    download_task >> etl_task
+------------------------------------------------------------
+#.env
+# -------------------------
+# Airflow Config
+# -------------------------
+AIRFLOW_UID=50000
+AIRFLOW_GID=0
+
+# Fernet key (use `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`)
+AIRFLOW__CORE__FERNET_KEY=crY4l1cAUUbk8Q_ND-LRW9F1gnMDjuJzhN81iJCgBNI=
+
+# -------------------------
+# Airflow Admin User
+# -------------------------
+_AIRFLOW_WWW_USER_USERNAME=airflow
+_AIRFLOW_WWW_USER_PASSWORD=airflow
+
+# -------------------------
+# MySQL Config
+# -------------------------
+MYSQL_HOST=mysql
+MYSQL_PORT=3306
+MYSQL_USER=airflow
+MYSQL_PASSWORD=airflow
+MYSQL_DB=airflow_db
+AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=mysql+mysqlconnector://airflow:airflow@mysql:3306/airflow_db
