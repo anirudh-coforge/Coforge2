@@ -1,0 +1,838 @@
+import time
+import numpy as np
+import pandas as pd
+from sqlalchemy import create_engine, text
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import urllib
+
+np.random.seed(42)
+
+# ---------- CONFIG ----------
+MSSQL_SERVER = "DESKTOP-6B6KT5K"
+MSSQL_DB     = "cryptodb1"
+MSSQL_DRIVER = "ODBC Driver 17 for SQL Server"
+
+ROWS_CUSTOMERS   = 5_000_000
+ROWS_ORDERS      = 8_000_000
+ROWS_PAGEVIEWS   = 12_000_000
+ROWS_PRODUCTS    = 3_000_000
+
+CHUNK_ROWS       = 200_000
+TO_SQL_CHUNKSIZE = 200_000  # increase for faster MySQL inserts
+
+# ---------- DB ENGINES ----------
+mssql_conn_str = (
+    f"Driver={{{MSSQL_DRIVER}}};"
+    f"Server={MSSQL_SERVER};"
+    f"Database={MSSQL_DB};"
+    "Trusted_Connection=yes;"
+)
+mssql_engine = create_engine(
+    f"mssql+pyodbc:///?odbc_connect={urllib.parse.quote_plus(mssql_conn_str)}",
+    fast_executemany=True
+)
+
+MYSQL_CONN = "mysql+pymysql://root:thinknyx%40123@localhost:3306/cryptodb"
+mysql_engine = create_engine(
+    MYSQL_CONN,
+    pool_size=5,
+    max_overflow=10,
+    pool_recycle=3600
+)
+
+# ---------- DUMMY API FETCH ----------
+def fetch_crypto_dummy():
+    rows, cols = 500_000, 20
+    df = pd.DataFrame(np.random.randn(rows, cols), columns=[f"col{i}" for i in range(cols)])
+    print(f"[crypto_data] Dummy API fetched: {rows} rows, {cols} cols")
+    return "crypto_data", df
+
+# ---------- SYNTHETIC TABLES ----------
+def synth_customers(n):
+    ids = np.arange(1, n + 1)
+    first = np.random.choice(["Aarav","Vihaan","Vivaan","Aditya","Arjun","Sai"], n)
+    last = np.random.choice(["Sharma","Verma","Gupta","Patel","Singh"], n)
+    age = np.random.randint(18, 80, n)
+    inc = np.random.lognormal(mean=10, sigma=0.6, size=n).round(2)
+    city = np.random.choice(["Delhi","Mumbai","Bengaluru","Hyderabad"], n)
+    join = pd.to_datetime("2015-01-01") + pd.to_timedelta(np.random.randint(0, 365*9, n), unit="D")
+    email = pd.Series(first).str.lower()+"."+pd.Series(last).str.lower()+"@example.com"
+    note = np.random.choice(["VIP","REGULAR","",""], n)
+    return pd.DataFrame({
+        "customer_id": ids, "first_name": first, "last_name": last,
+        "age": age, "annual_income": inc, "city": city, "joined_at": join,
+        "email": email, "notes": note
+    })
+
+def synth_orders(n, customer_id_range):
+    ids = np.arange(1, n + 1)
+    cust = np.random.randint(1, customer_id_range + 1, n)
+    order_date = pd.to_datetime("2018-01-01") + pd.to_timedelta(np.random.randint(0, 365*7, n), unit="D")
+    amount = np.random.gamma(3.0, 2000, size=n).round(2)
+    status = np.random.choice(["NEW","PAID","SHIPPED","CANCELLED","REFUNDED"], n)
+    channel = np.random.choice(["WEB","APP","STORE"], n)
+    return pd.DataFrame({
+        "order_id": ids, "customer_id": cust, "order_date": order_date,
+        "amount": amount, "status": status, "channel": channel
+    })
+
+def synth_pageviews(n, customer_id_range):
+    pv_id = np.arange(1, n + 1)
+    cust = np.random.randint(1, customer_id_range + 1, n)
+    ts = pd.to_datetime("2020-01-01") + pd.to_timedelta(np.random.randint(0, 365*4*24*60, n), unit="m")
+    page = np.random.choice(["/","/home","/product","/search","/cart"], n)
+    ref = np.random.choice(["direct","google","bing","email"], n)
+    dur = np.random.exponential(scale=60, size=n).round(2)
+    dev = np.random.choice(["mobile","desktop","tablet"], n)
+    return pd.DataFrame({
+        "view_id": pv_id, "customer_id": cust, "ts": ts,
+        "page": page, "referrer": ref, "duration_sec": dur, "device": dev
+    })
+
+def synth_products(n):
+    pid = np.arange(1, n + 1)
+    cat = np.random.choice(["Books","Electronics","Clothing","Grocery"], n)
+    price = np.random.lognormal(mean=4, sigma=0.5, size=n).round(2)
+    stock = np.random.randint(0, 5000, n)
+    rating = np.clip(np.random.normal(4.0, 0.6, size=n), 1, 5).round(2)
+    title = "Product-" + pd.Series(pid).astype(str)
+    desc = np.random.choice(["Good","Popular","New","Bestseller"], n)
+    return pd.DataFrame({
+        "product_id": pid, "category": cat, "price": price,
+        "stock": stock, "rating": rating, "title": title, "tag": desc
+    })
+
+# ---------- CHUNKED WRITE TO MS SQL ----------
+def write_table_mssql(table_name, df_generator, total_rows, *args):
+    first = True
+    written = 0
+    while written < total_rows:
+        rows = min(CHUNK_ROWS, total_rows - written)
+        df = df_generator(rows, *args) if args else df_generator(rows)
+        df.to_sql(table_name, mssql_engine, if_exists="replace" if first else "append",
+                  index=False, chunksize=TO_SQL_CHUNKSIZE)
+        written += rows
+        first = False
+        print(f"[{table_name}] Wrote {rows} rows (total {written}/{total_rows})")
+    with mssql_engine.connect() as conn:
+        cnt = conn.execute(text(f"SELECT COUNT(*) FROM {table_name}")).scalar()
+        print(f"[{table_name}] Final row count: {cnt}")
+
+# ---------- MIGRATE TO MYSQL (Optimized Parallel) ----------
+def migrate_table_mysql_parallel(table_name, chunk_size=200_000):
+    with mssql_engine.connect() as conn:
+        chunks = pd.read_sql(f"SELECT * FROM {table_name}", conn, chunksize=chunk_size)
+        
+        def insert_chunk(chunk):
+            chunk.to_sql(table_name, mysql_engine, if_exists="append", index=False, method="multi")
+            print(f"[{table_name}] migrated chunk of {len(chunk)} rows")
+        
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            futures = [executor.submit(insert_chunk, chunk) for chunk in chunks]
+            for f in as_completed(futures):
+                f.result()
+
+    print(f"[{table_name}] fully migrated to MySQL")
+
+# ---------- MAIN ----------
+def main():
+    tables = []
+
+    # 1) Crypto table from dummy API
+    tables.append(fetch_crypto_dummy())
+
+    # 2) Synthetic tables
+    tables.append(("customers_big", synth_customers, ROWS_CUSTOMERS))
+    tables.append(("orders_big", synth_orders, ROWS_ORDERS, ROWS_CUSTOMERS))
+    tables.append(("pageviews_big", synth_pageviews, ROWS_PAGEVIEWS, ROWS_CUSTOMERS))
+    tables.append(("products_big", synth_products, ROWS_PRODUCTS))
+
+    # ---------- Parallel store into MS SQL ----------
+    print("Storing tables into MS SQL...")
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        futures = []
+        for t in tables:
+            if len(t) == 2:  # API fetched df
+                df = t[1]
+                futures.append(executor.submit(lambda df=df, name=t[0]: df.to_sql(name, mssql_engine,
+                                        if_exists="replace", index=False, chunksize=TO_SQL_CHUNKSIZE)))
+            else:  # synthetic generator
+                futures.append(executor.submit(write_table_mssql, t[0], t[1], t[2], *t[3:]))
+
+        for f in as_completed(futures):
+            f.result()
+
+    # ---------- Ensure MySQL database exists ----------
+    with mysql_engine.connect() as conn:
+        conn.execute(text("CREATE DATABASE IF NOT EXISTS cryptodb"))
+        conn.execute(text("USE cryptodb"))
+
+    # ---------- Parallel migrate to MySQL ----------
+    print("Migrating tables to MySQL in parallel...")
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        futures = [executor.submit(migrate_table_mysql_parallel, t[0]) for t in tables]
+        for f in as_completed(futures):
+            f.result()
+
+    print("All tables stored and migrated successfully.")
+
+if __name__ == "__main__":
+    main()
+
+
+-------------------------------------------------------
+import time
+Imports the time module for sleep/delays or timing operations (used later for backoff or prints).
+import numpy as np
+Imports NumPy as np — used for random number generation and efficient numeric arrays.
+import pandas as pd
+
+Imports Pandas as pd — used to create and manipulate DataFrames.
+
+from sqlalchemy import create_engine, text
+
+Imports create_engine to build DB engines and text to wrap raw SQL strings safely for execution.
+
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+Imports thread-based concurrency tools: ThreadPoolExecutor to run callables in threads and as_completed to iterate finished futures.
+
+import urllib
+
+Imports urllib to URL-encode the ODBC connection string for SQLAlchemy.
+
+np.random.seed(42)
+
+Sets the NumPy random seed to make random data reproducible across runs.
+
+# ---------- CONFIG ----------
+MSSQL_SERVER = "DESKTOP-6B6KT5K"
+The hostname (or instance) of the MS SQL Server to connect to.
+MSSQL_DB     = "cryptodb1"
+The MS SQL database name to use when connecting and writing tables.
+MSSQL_DRIVER = "ODBC Driver 17 for SQL Server"
+The ODBC driver string used by pyodbc (wrapped by SQLAlchemy).
+
+ROWS_CUSTOMERS   = 5_000_000
+ROWS_ORDERS      = 8_000_000
+ROWS_PAGEVIEWS   = 12_000_000
+ROWS_PRODUCTS    = 3_000_000
+
+
+Constants that define how many synthetic rows to generate for each table. (Large counts for stress testing.)
+
+CHUNK_ROWS       = 200_000
+
+
+How many rows to generate per chunk when creating synthetic data and writing to MSSQL. Controls memory footprint.
+
+TO_SQL_CHUNKSIZE = 200_000  # increase for faster MySQL inserts
+
+
+The chunksize parameter passed to DataFrame.to_sql() — controls batch size per insert statement. Comment suggests increasing for faster inserts (but larger means more memory).
+
+# ---------- DB ENGINES ----------
+
+mssql_conn_str = (
+    f"Driver={{{MSSQL_DRIVER}}};"
+    f"Server={MSSQL_SERVER};"
+    f"Database={MSSQL_DB};"
+    "Trusted_Connection=yes;"
+)
+Builds a multi-line ODBC connection string for SQL Server using f-strings.
+Note {{ and }} inside f-string produce literal {} around the driver name.
+Trusted_Connection=yes uses Windows authentication (no username/password).
+mssql_engine = create_engine(
+    f"mssql+pyodbc:///?odbc_connect={urllib.parse.quote_plus(mssql_conn_str)}",
+    fast_executemany=True
+)
+
+Creates a SQLAlchemy engine for MS SQL using the pyodbc dialect.
+urllib.parse.quote_plus(...) URL
+-encodes the ODBC string for use in the connection URL.
+fast_executemany=True
+ enables pyodbc fast executemany optimization for bulk inserts into SQL Server
+MYSQL_CONN = "mysql+pymysql://root:thinknyx%40123@localhost:3306/cryptodb"
+
+MySQL connection URL (with username root and a URL-encoded password containing @ as %40) pointing to DB cryptodb on localhost port 3306.
+
+Note: credentials are hard-coded (consider environment variables for production).
+
+mysql_engine = create_engine(
+    MYSQL_CONN,
+    pool_size=5,
+    max_overflow=10,
+    pool_recycle=3600
+)
+
+Creates a SQLAlchemy engine for MySQL using pymysql with connection pool settings:
+pool_size=5
+: keep 5 persistent connections.
+max_overflow=10
+: allow up to 10 extra transient connections.
+pool_recycle=3600: recycle connections after 3600s to avoid DB timeouts.
+# ---------- DUMMY API FETCH ----------
+
+def fetch_crypto_dummy():
+
+Defines a function that simulates fetching crypto API data.
+
+    rows, cols = 500_000, 20
+
+
+Sets the shape: 500k rows × 20 columns for the simulated dataset.
+
+    df = pd.DataFrame(np.random.randn(rows, cols), columns=[f"col{i}" for i in range(cols)])
+
+
+Creates a Pandas DataFrame with normally distributed random numbers (randn) and column names col0..col19.
+
+    print(f"[crypto_data] Dummy API fetched: {rows} rows, {cols} cols")
+
+
+Logs the fetch action to stdout.
+
+    return "crypto_data", df
+
+
+Returns a tuple: a table name "crypto_data" and the DataFrame df. This matches the later tables structure.
+
+# ---------- SYNTHETIC TABLES ----------
+
+def synth_customers(n):
+
+Function to generate n synthetic customer rows.
+
+    ids = np.arange(1, n + 1)
+
+ids is a NumPy array with values 1..n (customer IDs).
+
+    first = np.random.choice(["Aarav","Vihaan","Vivaan","Aditya","Arjun","Sai"], n)
+
+
+Randomly pick n first names from the provided list.
+
+    last = np.random.choice(["Sharma","Verma","Gupta","Patel","Singh"], n)
+
+
+Randomly pick n last names.
+
+    age = np.random.randint(18, 80, n)
+
+
+Generate random integer ages between 18 and 79 (inclusive).
+
+    inc = np.random.lognormal(mean=10, sigma=0.6, size=n).round(2)
+
+
+Annual income simulated with a log-normal distribution (large mean → high values), rounded to 2 decimals.
+
+    city = np.random.choice(["Delhi","Mumbai","Bengaluru","Hyderabad"], n)
+
+
+Random city assignment.
+
+    join = pd.to_datetime("2015-01-01") + pd.to_timedelta(np.random.randint(0, 365*9, n), unit="D")
+
+
+Random join dates between 2015-01-01 and ~9 years later by adding random number of days.
+
+    email = pd.Series(first).str.lower()+"."+pd.Series(last).str.lower()+"@example.com"
+
+
+Constructs an email address by concatenating lowercase first and last names separated by . and appending @example.com.
+
+    note = np.random.choice(["VIP","REGULAR","",""], n)
+
+
+Small notes randomly assigned; many empty strings simulate missing notes.
+
+    return pd.DataFrame({
+        "customer_id": ids, "first_name": first, "last_name": last,
+        "age": age, "annual_income": inc, "city": city, "joined_at": join,
+        "email": email, "notes": note
+    })
+
+
+Returns a DataFrame with the constructed columns.
+
+def synth_orders(n, customer_id_range):
+
+Function to generate n synthetic orders. customer_id_range tells how many customer IDs exist (used to link orders to customers).
+
+    ids = np.arange(1, n + 1)
+
+Order IDs 1..n.
+    cust = np.random.randint(1, customer_id_range + 1, n)
+
+Randomly assign a customer_id in [1, customer_id_range].
+    order_date = pd.to_datetime("2018-01-01") + pd.to_timedelta(np.random.randint(0, 365*7, n), unit="D")
+
+
+Random order dates from 2018-01-01 over a 7-year range.
+
+    amount = np.random.gamma(3.0, 2000, size=n).round(2)
+
+
+Order amounts simulated with a Gamma distribution (positive skew), rounded to 2 decimals.
+
+    status = np.random.choice(["NEW","PAID","SHIPPED","CANCELLED","REFUNDED"], n)
+
+
+Random order status values.
+
+    channel = np.random.choice(["WEB","APP","STORE"], n)
+
+
+Random sales channel.
+
+    return pd.DataFrame({
+        "order_id": ids, "customer_id": cust, "order_date": order_date,
+        "amount": amount, "status": status, "channel": channel
+    })
+
+
+Returns the orders DataFrame.
+
+def synth_pageviews(n, customer_id_range):
+
+
+Function to create n pageview events related to customers.
+
+    pv_id = np.arange(1, n + 1)
+
+
+Pageview IDs 1..n.
+
+    cust = np.random.randint(1, customer_id_range + 1, n)
+
+
+Assign random customer id per pageview.
+
+    ts = pd.to_datetime("2020-01-01") + pd.to_timedelta(np.random.randint(0, 365*4*24*60, n), unit="m")
+
+
+Generate timestamps starting at 2020-01-01 with random offset in minutes over ~4 years (436524*60 minutes).
+
+    page = np.random.choice(["/","/home","/product","/search","/cart"], n)
+
+
+Page path visited.
+
+    ref = np.random.choice(["direct","google","bing","email"], n)
+
+
+Referrer attribution.
+
+    dur = np.random.exponential(scale=60, size=n).round(2)
+
+
+Session duration (seconds) from an exponential distribution; many short views, some long.
+
+    dev = np.random.choice(["mobile","desktop","tablet"], n)
+
+
+Device type.
+
+    return pd.DataFrame({
+        "view_id": pv_id, "customer_id": cust, "ts": ts,
+        "page": page, "referrer": ref, "duration_sec": dur, "device": dev
+    })
+
+
+Returns the pageviews DataFrame.
+
+def synth_products(n):
+
+
+Function to create n synthetic product records.
+
+    pid = np.arange(1, n + 1)
+
+
+Product IDs 1..n.
+
+    cat = np.random.choice(["Books","Electronics","Clothing","Grocery"], n)
+
+
+Product category.
+
+    price = np.random.lognormal(mean=4, sigma=0.5, size=n).round(2)
+
+
+Price simulated using log-normal distribution (positive, skewed), rounded.
+
+    stock = np.random.randint(0, 5000, n)
+
+
+Random stock levels.
+
+    rating = np.clip(np.random.normal(4.0, 0.6, size=n), 1, 5).round(2)
+
+
+Product rating from normal distribution centered at 4.0, clipped to [1,5], rounded.
+
+    title = "Product-" + pd.Series(pid).astype(str)
+
+
+Product title as Product-<id>.
+
+    desc = np.random.choice(["Good","Popular","New","Bestseller"], n)
+
+
+Short description/tag.
+
+    return pd.DataFrame({
+        "product_id": pid, "category": cat, "price": price,
+        "stock": stock, "rating": rating, "title": title, "tag": desc
+    })
+
+
+Returns the products DataFrame.
+
+# ---------- CHUNKED WRITE TO MS SQL ----------
+
+
+Section header: functions to write data into MS SQL in chunks.
+
+def write_table_mssql(table_name, df_generator, total_rows, *args):
+
+
+Function to iteratively generate and write total_rows into MSSQL using df_generator.
+
+table_name: destination table name.
+
+df_generator: a function that returns a DataFrame given a row count and optional args.
+
+*args: extra args passed to generator (e.g., customer_id_range).
+
+    first = True
+
+
+Flag to use if_exists='replace' for the first write (to create/overwrite table), then append afterwards.
+
+    written = 0
+
+
+Counter for how many rows have been written so far.
+
+    while written < total_rows:
+
+
+Loop until we've written the requested number of rows.
+
+        rows = min(CHUNK_ROWS, total_rows - written)
+
+
+Compute how many rows to generate in this iteration (either CHUNK_ROWS or remainder).
+
+        df = df_generator(rows, *args) if args else df_generator(rows)
+
+
+Call generator function to produce a DataFrame of rows rows. If args provided, pass them; else call with just rows.
+
+        df.to_sql(table_name, mssql_engine, if_exists="replace" if first else "append",
+                  index=False, chunksize=TO_SQL_CHUNKSIZE)
+
+
+Write chunk to MSSQL using pandas .to_sql():
+
+if_exists="replace" on first chunk (create table), append afterwards.
+
+index=False to avoid writing DataFrame index as a column.
+
+chunksize=TO_SQL_CHUNKSIZE to batch inserts internally.
+
+        written += rows
+
+
+Update the written count.
+
+        first = False
+
+
+Subsequent iterations will append rather than replace.
+
+        print(f"[{table_name}] Wrote {rows} rows (total {written}/{total_rows})")
+
+
+Progress log per chunk.
+
+    with mssql_engine.connect() as conn:
+
+
+Open a connection context to MSSQL to run a verification query.
+
+        cnt = conn.execute(text(f"SELECT COUNT(*) FROM {table_name}")).scalar()
+
+
+Execute a SELECT COUNT(*) to verify the final row count in the newly created table and fetch the scalar result.
+
+        print(f"[{table_name}] Final row count: {cnt}")
+
+
+Log the final count.
+
+# ---------- MIGRATE TO MYSQL (Optimized Parallel) ----------
+
+
+Section header: functions to migrate data from MSSQL to MySQL efficiently.
+
+def migrate_table_mysql_parallel(table_name, chunk_size=200_000):
+
+
+Function to migrate a table from MSSQL to MySQL in parallel chunk-by-chunk.
+
+chunk_size controls how many rows to read per chunk from MSSQL.
+
+    with mssql_engine.connect() as conn:
+
+
+Open MSSQL connection context for reading.
+
+        chunks = pd.read_sql(f"SELECT * FROM {table_name}", conn, chunksize=chunk_size)
+
+
+Use pd.read_sql() with chunksize to return an iterator (TextFileReader-like) that yields DataFrame chunks of up to chunk_size rows.
+
+This avoids loading the entire table into memory.
+
+        def insert_chunk(chunk):
+
+
+Inner function that inserts a given chunk DataFrame into MySQL.
+
+            chunk.to_sql(table_name, mysql_engine, if_exists="append", index=False, method="multi")
+
+
+For each chunk, use .to_sql() to append to the MySQL table:
+
+if_exists="append" to add rows.
+
+method="multi" attempts to combine multiple rows into a single multi-row INSERT for performance.
+
+            print(f"[{table_name}] migrated chunk of {len(chunk)} rows")
+
+
+Log successful chunk insert.
+
+        with ThreadPoolExecutor(max_workers=4) as executor:
+
+
+Create a thread pool with up to 4 workers to parallelize chunk inserts.
+
+            futures = [executor.submit(insert_chunk, chunk) for chunk in chunks]
+
+
+Submit each chunk read from MSSQL to the thread pool for insertion into MySQL. Note: this builds a list of futures; chunks is a generator, so this also iterates through reading all chunks (submitting tasks as it goes).
+
+            for f in as_completed(futures):
+                f.result()
+
+
+Iterate over futures as they complete; f.result() will re-raise any exceptions encountered during chunk insertion (so failures are not swallowed).
+
+    print(f"[{table_name}] fully migrated to MySQL")
+
+
+After all chunks processed, print completion notice.
+
+# ---------- MAIN ----------
+
+
+Section header: main workflow.
+
+def main():
+
+
+Declares the main() function that coordinates generation, MSSQL storage, and migration to MySQL.
+
+    tables = []
+
+
+Initialize an empty list to hold table definitions (tuples) and API-returned data.
+
+    # 1) Crypto table from dummy API
+
+
+Comment: first table comes from fake API.
+
+    tables.append(fetch_crypto_dummy())
+
+
+Calls fetch_crypto_dummy() and appends the returned tuple ("crypto_data", df) to tables.
+
+    # 2) Synthetic tables
+
+
+Comment: now append synthetic table definitions.
+
+    tables.append(("customers_big", synth_customers, ROWS_CUSTOMERS))
+
+
+Appends a tuple describing the customers table:
+
+name "customers_big", generator synth_customers, total rows ROWS_CUSTOMERS.
+
+    tables.append(("orders_big", synth_orders, ROWS_ORDERS, ROWS_CUSTOMERS))
+
+
+Appends orders definition; note extra arg ROWS_CUSTOMERS passed later to the generator so orders can pick valid customer_ids.
+
+    tables.append(("pageviews_big", synth_pageviews, ROWS_PAGEVIEWS, ROWS_CUSTOMERS))
+
+
+Appends pageviews with same customer_id range dependency.
+
+    tables.append(("products_big", synth_products, ROWS_PRODUCTS))
+
+
+Appends products definition.
+
+    # ---------- Parallel store into MS SQL ----------
+
+
+Comment marking the step for storing generated tables into MSSQL in parallel.
+
+    print("Storing tables into MS SQL...")
+
+
+Log start of MSSQL storage phase.
+
+    with ThreadPoolExecutor(max_workers=5) as executor:
+
+
+Create thread pool with up to 5 workers to run store tasks concurrently.
+
+        futures = []
+
+
+List to collect futures for each submitted job.
+
+        for t in tables:
+
+
+Iterate over tables entries (mixture of API tuple and generator tuples).
+
+            if len(t) == 2:  # API fetched df
+
+
+If the tuple has length 2, it's the API result (name, df).
+
+                df = t[1]
+
+
+Extract DataFrame from the API tuple.
+
+                futures.append(executor.submit(lambda df=df, name=t[0]: df.to_sql(name, mssql_engine,
+                                        if_exists="replace", index=False, chunksize=TO_SQL_CHUNKSIZE)))
+
+
+Submit a lambda to the executor that writes the DataFrame to MSSQL.
+
+Note the lambda df=df, name=t[0]: ... pattern: this captures current df and t[0] values by default-argument binding (avoids late-binding closure bugs).
+
+Uses .to_sql() with if_exists="replace" so that the API table is created fresh, index=False, and specified chunksize.
+
+            else:  # synthetic generator
+
+
+Otherwise, this t is a synthetic generator tuple: (name, generator_fn, total_rows, ...optional args).
+
+                futures.append(executor.submit(write_table_mssql, t[0], t[1], t[2], *t[3:]))
+
+
+Submit the write_table_mssql function to generate and write the whole synthetic table in chunks:
+
+Arguments: table_name=t[0], df_generator=t[1], total_rows=t[2], and *t[3:] passes optional extra args like ROWS_CUSTOMERS to the generator.
+
+        for f in as_completed(futures):
+            f.result()
+
+
+Wait for all submitted jobs to complete and re-raise any exceptions they threw.
+
+    # ---------- Ensure MySQL database exists ----------
+
+
+Section: ensure the database exists in MySQL before migrating tables into it.
+
+    with mysql_engine.connect() as conn:
+
+
+Open a connection to MySQL server using the previously created mysql_engine (which already includes a DB in the URL in your code).
+
+        conn.execute(text("CREATE DATABASE IF NOT EXISTS cryptodb"))
+
+
+Execute raw SQL to create database cryptodb if it doesn't exist.
+
+Note: mysql_engine in this script points to cryptodb in the connection string already; creating a DB while connected to a non-server-level connection may work but is a bit awkward — earlier assistant suggested using a server-level engine without DB for this step.
+
+        conn.execute(text("USE cryptodb"))
+
+
+Execute USE to switch the session to cryptodb.
+
+    # ---------- Parallel migrate to MySQL ----------
+
+
+Section: migrate each table from MSSQL into MySQL in parallel.
+
+    print("Migrating tables to MySQL in parallel...")
+
+
+Log start of migration.
+
+    with ThreadPoolExecutor(max_workers=3) as executor:
+
+
+Create thread pool with up to 3 workers to concurrently migrate separate tables.
+
+        futures = [executor.submit(migrate_table_mysql_parallel, t[0]) for t in tables]
+
+
+Submit migrate_table_mysql_parallel(table_name) for each table (use t[0] as the table name).
+
+This will read that table from MSSQL in chunks and insert into MySQL (as defined earlier).
+
+        for f in as_completed(futures):
+            f.result()
+
+
+Wait for all table migrations to finish and re-raise exceptions.
+
+    print("All tables stored and migrated successfully.")
+
+
+Final success message.
+
+if __name__ == "__main__":
+    main()
+
+
+Standard Python idiom: if the script is executed directly, call main().
+
+High-level notes (short)
+
+Flow: generate (or fetch) data → write to MS SQL in parallel → create/ensure MySQL DB → read from MS SQL in chunks and insert into MySQL in parallel.
+
+Memory control: chunked generation (CHUNK_ROWS) and chunked reads (pd.read_sql(..., chunksize=...)) prevent loading full large tables into memory.
+
+Concurrency: ThreadPoolExecutor used at two levels:
+
+Parallel generation/writes into MSSQL (max_workers=5).
+
+Parallel migration to MySQL: each table migration spawns a thread pool (inside migrate_table_mysql_parallel uses max_workers=4 for chunk inserts) and outer pool runs migrations for separate tables (max_workers=3).
+
+Potential risks / caveats:
+
+Hard-coded MySQL credentials; better to use environment variables.
+
+Creating the MySQL DB using an engine that already references the DB may be fragile—server-level engine is safer.
+
+Submitting all chunks to a thread pool at once (futures = [executor.submit(insert_chunk, chunk) for chunk in chunks]) may build a large list of futures if the table has many chunks — requires memory and many concurrent tasks; a safer approach is to stream-read and submit with bounded queue/backpressure.
+
+Using to_sql(..., method="multi") is okay but for large datasets LOAD DATA INFILE (CSV + LOAD DATA) is far faster for MySQL.
+
+fast_executemany=True applies only to the MS SQL engine (pyodbc) insert performance

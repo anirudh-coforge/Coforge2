@@ -1,0 +1,379 @@
+- **Practical Exercise:**  
+  - Working on mini-projects, such as cleaning and analyzing a raw dataset.
+
+# Sales Data Cleaning & Analysis - Mini Project
+# =============================================
+# This notebook demonstrates:
+# 1. Generating a noisy dataset (raw_sales.csv)
+# 2. Cleaning and preprocessing
+# 3. Exploratory Data Analysis (EDA)
+# 4. Aggregations & Pivot tables
+# 5. Visualizations
+# ---------------------------------------------
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import re
+from collections import defaultdict
+from tqdm import tqdm
+
+# -----------------------------
+# STEP 1: Generate noisy dataset
+# -----------------------------
+
+rows = 50_000   # for demo (change to 10_000_000 for ~1GB)
+np.random.seed(42)
+
+data = {
+    "OrderID": np.arange(1, rows+1),
+    "Customer": np.random.choice(
+        ["Alice ", " Bob", "Charlie", None, "Eva", "Dave ", "alice"], rows),
+    "Product": np.random.choice(
+        ["Laptop", "Mobile", "Tablet", "Headphones", "Laptop ", "mobile"], rows),
+    "Quantity": np.random.choice([1, 2, 3, np.nan, 5], rows),
+    "Price": np.random.choice(
+        [500, 800, 850, 300, "not_available", np.nan], rows),
+    "OrderDate": np.random.choice(
+        ["2021-07-01", "2021/07/05", "07-10-2021", None], rows),
+    "Region": np.random.choice(
+        ["North", "East", "West", "South", " Unknown"], rows)
+}
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import re
+from collections import defaultdict
+from tqdm import tqdm
+# STEP 2: Load & Inspect Dataset
+df = pd.read_csv("raw_sales.csv")
+print("Shape:", df.shape)
+print("\nMissing values:")
+print(df.isna().sum())
+df.head(10)
+df.describe()
+# -----------------------------
+# STEP 3: Data Cleaning
+# -----------------------------
+
+# Strip spaces, standardize casing
+df['Customer'] = df['Customer'].astype(str).str.strip().str.title().replace("None", np.nan)
+df['Region'] = df['Region'].astype(str).str.strip().str.title().replace("Unknown", np.nan)
+# Normalize product names
+def canonical_product(name):
+    if pd.isna(name):
+        return np.nan
+    k = re.sub(r'\s+', '', str(name)).lower()
+    mapping = {
+        'mobile': 'Mobile',
+        'laptop': 'Laptop',
+        'tablet': 'Tablet',
+        'headphones': 'Headphones',
+    }
+    return mapping.get(k, str(name).strip().title())
+
+df['Product'] = df['Product'].map(canonical_product)
+
+# Convert Quantity & Price
+df['Quantity'] = pd.to_numeric(df['Quantity'], errors='coerce')
+df['Price'] = pd.to_numeric(df['Price'].replace("not_available", np.nan), errors='coerce')
+
+# Impute missing values with median
+df['Quantity'] = df['Quantity'].fillna(df['Quantity'].median())
+df['Price'] = df['Price'].fillna(df['Price'].median())
+# Convert dates
+
+
+df['OrderDate'] = pd.to_datetime(df['OrderDate'], errors='coerce').dt.strftime('%Y-%m-%d')
+df['OrderDate'] = pd.to_datetime(df['OrderDate'], errors='coerce', infer_datetime_format=True)
+
+# Compute Revenue
+df['Revenue'] = df['Quantity'] * df['Price']
+
+print(" Data cleaning completed")
+df.head(10)
+
+# -----------------------------
+# STEP 4: Exploratory Data Analysis (EDA)
+# -----------------------------
+
+print("\n Descriptive Statistics:")
+print(df.describe(include='all'))
+
+print("\n Unique Customers:", df['Customer'].nunique())
+print(" Unique Products:", df['Product'].nunique())
+print(" Date Range:", df['OrderDate'].min(), "to", df['OrderDate'].max())
+
+# Missing values check again
+print("\nMissing values after cleaning:")
+print(df.isna().sum())
+python
+
+# -----------------------------
+# STEP 5: Aggregation & Pivot
+# -----------------------------
+
+# Total revenue by product
+prod_df = df.groupby('Product')[['Quantity','Revenue']].sum().sort_values('Revenue', ascending=False)
+print("\n Revenue by Product:")
+print(prod_df)
+
+# Total revenue by region
+reg_df = df.groupby('Region')[['Quantity','Revenue']].sum().sort_values('Revenue', ascending=False)
+print("\n Revenue by Region:")
+print(reg_df)
+
+# Top 5 customers
+cust_df = df.groupby('Customer')['Revenue'].sum().sort_values(ascending=False).head(5)
+print("\n Top 5 Customers by Revenue:")
+print(cust_df)
+
+# Pivot table: Region vs Product
+pivot_df = df.pivot_table(values='Revenue', index='Region', columns='Product', aggfunc='sum', fill_value=0)
+print("\n Pivot Table (Region vs Product):")
+print(pivot_df)
+
+# -----------------------------
+# STEP 6: Visualizations
+# -----------------------------
+
+# 1. Revenue by Product
+plt.figure(figsize=(8,5))
+sns.barplot(x=prod_df.index, y=prod_df['Revenue'])
+plt.title("Revenue by Product")
+plt.show()
+# 2. Revenue by Region
+plt.figure(figsize=(8,5))
+sns.barplot(x=reg_df.index, y=reg_df['Revenue'])
+plt.title("Revenue by Region")
+plt.show()
+
+# 3. Sales Trend over time
+daily_sales = df.groupby('OrderDate')['Revenue'].sum()
+plt.figure(figsize=(10,5))
+daily_sales.plot(kind='line', marker='o')
+plt.title("Sales Trend Over Time")
+plt.ylabel("Revenue")
+plt.show()
+
+# 4. Pivot heatmap (Region vs Product)
+plt.figure(figsize=(8,6))
+sns.heatmap(pivot_df, annot=True, fmt=".0f", cmap="Blues")
+plt.title("Revenue: Region vs Product")
+plt.show()
+python
+
+# -----------------------------
+# STEP 7: Insights & Conclusion
+# -----------------------------
+
+print(" Insights:")
+print("- Best Region:", reg_df.index[0], "with Revenue:", reg_df['Revenue'].iloc[0])
+print("- Best Product:", prod_df.index[0], "with Revenue:", prod_df['Revenue'].iloc[0])
+print("- Top Customer:", cust_df.index[0], "with Revenue:", cust_df.iloc[0])
+
+Data Wrangling with raw_sales.csv
+# Step 1: import libraries
+import pandas as pd
+import numpy as np
+
+# Load a small sample of raw_sales.csv (for demo, full file might be too big)
+df = pd.read_csv("raw_sales.csv").head(5)   # just 5 rows for demo
+print("Initial DataFrame:\n", df)
+
+#Step 2: Add a row
+# Create a new row as dict
+new_row = {
+    "OrderID": 999999,
+    "Customer": "Test Customer",
+    "Product": "Laptop",
+    "Quantity": 2,
+    "Price": 1200,
+    "OrderDate": "2021-07-15",
+    "Region": "North"
+}
+# Append row
+df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+print("\nAfter Adding Row:\n", df)
+
+#Step 3: Drop the same row
+df = df[df['OrderID'] != 999999]   # drop where OrderID == 999999
+print("\nAfter Dropping Row:\n", df)
+
+#Step 4: Add a column
+# Add new column: Revenue = Quantity * Price
+df['Revenue'] = df['Quantity'] * pd.to_numeric(df['Price'], errors='coerce')
+print("\nAfter Adding Column (Revenue):\n", df)
+Step 5: Rename the column
+df.rename(columns={"Revenue": "TotalRevenue"}, inplace=True)
+print("\nAfter Renaming Column:\n", df)
+#Step 6: Drop the column
+df.drop(columns=["TotalRevenue"], inplace=True)
+print("\nAfter Dropping Column:\n", df)
+
+#Step 7: Column datatype changes
+print("\nData types before change:\n", df.dtypes)
+
+# Convert OrderDate → datetime, Quantity → int
+df['OrderDate'] = pd.to_datetime(df['OrderDate'], errors='coerce')
+df['Quantity'] = df['Quantity'].astype('Int64')  # Nullable int
+
+print("\nData types after change:\n", df.dtypes)
+
+#Step 8: Typecasting (Price → float)
+df['Price'] = pd.to_numeric(df['Price'], errors='coerce').astype(float)
+print("\nAfter Typecasting Price to float:\n", df.dtypes)
+
+#Step 9: Conditional construct
+# Add new column: HighValueOrder (True if Price > 700)
+df['HighValueOrder'] = np.where(df['Price'] > 700, True, False)
+print("\nAfter Conditional Construct (HighValueOrder):\n", df)
+
+# Step 10: Data Grouping & Aggregation
+# Total sales per Product
+grouped = df.groupby('Product')['Price'].sum().reset_index().rename(columns={'Price':'TotalSales'})
+print("\nTotal Sales per Product:\n", grouped)
+
+# Step 11: Subsetting & Indexing
+# Select orders from 'North' region
+north_orders = df[df['Region'] == 'North']
+print("\nNorth Region Orders:\n", north_orders)
+
+# Access specific column via indexing
+print("\nOrderID column:\n", df['OrderID'])
+
+# Step 12: String Matching
+# Filter customers with 'Test' in name
+test_customers = df[df['Customer'].str.contains('Test', na=False)]
+print("\nCustomers containing 'Test':\n", test_customers)
+
+# Step 13: Ranking & Sorting
+# Sort by Price descending
+sorted_df = df.sort_values(by='Price', ascending=False)
+print("\nSorted by Price descending:\n", sorted_df)
+
+# Add ranking column by Price
+df['PriceRank'] = df['Price'].rank(method='dense', ascending=False)
+print("\nPrice Ranking:\n", df[['OrderID','Price','PriceRank']])
+
+# Step 14: Concatenate, Merge & Joins
+# Create another small DataFrame for joining
+df_discounts = pd.DataFrame({
+    'Product': ['Laptop','Phone'],
+    'Discount': [100, 50]
+})
+# Merge with discounts
+df_merged = pd.merge(df, df_discounts, on='Product', how='left')
+print("\nAfter Merge with Discounts:\n", df_merged)
+
+# Step 15: Crosstabulation
+# Count orders per Region and Product
+ct = pd.crosstab(df['Region'], df['Product'])
+print("\nCrosstab of Region vs Product:\n", ct)
+
+# Step 16: Pivoting
+pivot = df.pivot_table(index='Region', columns='Product', values='Price', aggfunc='sum', fill_value=0)
+print("\nPivot Table (Total Price per Region/Product):\n", pivot)
+
+# Step 17: Reshaping
+# Melt pivot table back to long format
+melted = pivot.reset_index().melt(id_vars='Region', var_name='Product', value_name='TotalPrice')
+print("\nMelted Pivot Table:\n", melted)
+
+# Step 18: Load
+# Example: save cleaned/transformed data to CSV (ready for DB load)
+df_merged.to_csv('cleaned_sales.csv', index=False)
+print("\nCleaned data saved to 'cleaned_sales.csv'. Ready for database or data lake ingestion.")
+
+
+Essential Pandas DataFrame Inspection Commands
+import pandas as pd
+
+# Sample DataFrame
+data = {
+    "OrderID": [1, 2, 3, 4],
+    "Customer": ["Alice", "Bob", "Charlie", "David"],
+    "Price": [500, 800, 300, 1200],
+    "Quantity": [2, 1, 4, 3]
+}
+df = pd.DataFrame(data)
+1. Shape of Data
+df.shape
+•	Returns a tuple (rows, columns)
+•	Example: (4, 4) → 4 rows, 4 columns
+
+2. Basic Info
+df.info()
+•	Summary of DataFrame
+•	Includes: column names, non-null counts, data types, memory usage
+•	Helps detect missing values & datatypes
+
+3. Statistical Summary
+df.describe()
+•	Gives descriptive statistics for numeric columns
+•	Includes: count, mean, std, min, quartiles, max
+df.describe(include="all")
+•	Includes categorical columns too (unique values, top frequency, etc.)
+
+4. First few rows
+df.head()
+•	Shows the first 5 rows (you can pass n to see more, e.g. df.head(10))
+
+5. Last few rows
+df.tail()
+•	Shows the last 5 rows (good for checking bottom records)
+
+6. Column names
+df.columns
+•	Lists all column names
+
+7. Data types
+df.dtypes
+•	Shows the datatype of each column
+
+8. Check missing values
+df.isnull().sum()
+•	Count of missing values per column
+
+9. Unique values in a column
+df['Customer'].unique()
+•	Lists unique values for a specific column
+df['Customer'].nunique()
+•	Count of unique values
+
+10. Value counts (frequency)
+df['Customer'].value_counts()
+•	Frequency of each unique value in a column
+
+11. Index
+df.index
+•	Shows the index range of the DataFrame
+
+12. Correlation
+df.corr(numeric_only=True)
+Correlation matrix between numeric columns
+import pandas as pd
+import numpy as np
+from sklearn.impute import KNNImputer
+# Load dataset (assuming raw_sales.csv is large, we take a sample for demo)
+df = pd.read_csv("raw_sales.csv")
+print("Before Imputation (first 10 rows):\n", df.head(10))
+print("\nMissing Values Count:\n", df[['Quantity', 'Price']].isnull().sum())
+
+# Select subset for imputation
+num_cols = ['Quantity', 'Price']
+df_numeric = df[num_cols]
+imputer = KNNImputer(n_neighbors=5, weights='distance')  # k=5 neighbors, weighted by distance
+df_imputed = pd.DataFrame(imputer.fit_transform(df_numeric), columns=num_cols)
+# Replace original numeric columns with imputed ones
+df[num_cols] = df_imputed
+print("\nAfter Imputation (first 10 rows):\n", df.head(10))
+print("\nMissing Values Count (after imputation):\n", df[['Quantity', 'Price']].isnull().sum()
+
+13. Sample
+df.sample(3)
+•	Randomly selects 3 rows (good for quick peek)
+
+
