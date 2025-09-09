@@ -82,7 +82,8 @@ ________________________________________
 Database Setup (MySQL)
 Before running the container, make sure MySQL has the database ready:
 CREATE DATABASE etl_db;
-GRANT ALL PRIVILEGES ON etl_db.* TO 'airflow'@'%' IDENTIFIED BY 'airflow';
+CREATE USER 'airflow'@'%' IDENTIFIED BY 'airflow';
+GRANT ALL PRIVILEGES ON etl_db.* TO 'airflow'@'%';
 FLUSH PRIVILEGES;
 -------------------------------------------
 Run the container
