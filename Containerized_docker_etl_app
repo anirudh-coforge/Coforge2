@@ -55,7 +55,7 @@ def main():
     df = fetch_data()
     df_clean = clean_data(df)
     load_to_mysql(df_clean,
-                  user="airflowt",      # update if needed
+                  user="airflow",      # update if needed
                   password="airflow",  # update if needed
                   host="mysql",        # service name in Docker Compose
                   port=3306,
