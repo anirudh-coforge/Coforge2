@@ -1,0 +1,95 @@
+python-etl-app/
+│
+├── etl/                   # Package containing ETL modules
+│    ├── __init__.py
+│    ├── extract.py              # Functions to fetch data 
+│    ├── transform.py        # Data cleaning and 
+│    └── load.py                 # Load data │
+├── app.py                      # Entry point: orchestrates ETL 
+├── requirements.txt          # Dependencies
+├── Dockerfile                    # Docker build instructions
+└── README.md                 # Documentation
+--------------------------------------------------
+#etl/extract.py
+import requests
+import pandas as pd
+from io import StringIO
+def fetch_data():
+    url = "https://people.sc.fsu.edu/~jburkardt/data/csv/airtravel.csv"
+    response = requests.get(url)
+    if response.status_code != 200:
+        raise Exception(f"Failed to fetch data: {response.status_code}")
+    # Convert CSV string to DataFrame
+    data = StringIO(response.text)
+    df = pd.read_csv(data)
+    print("Data extracted successfully.")
+    return df
+________________________________________
+etl/transform.py
+import pandas as pd
+def clean_data(df: pd.DataFrame):
+     df = df.rename(columns={df.columns[0]: "Month"})  
+    df = df.dropna()  # Drop missing rows
+    print(" Data transformed successfully.")
+    return df
+--------------------------------------------------
+#etl/load.py (updated for MySQL)
+import pandas as pd
+from sqlalchemy import create_engine
+def load_to_mysql(df: pd.DataFrame,
+                  user="root",
+                  password="root",
+                  host="mysql",
+                  port=3306,
+                 database="etl_db"):
+    engine = create_engine(f"mysql+pymysql://{user}:{password}@{host}:{port}/{database}")
+ df.to_sql("air_travel", con=engine, if_exists="replace", index=False)
+ print(f" Data loaded successfully into MySQL database `{database}` (table: air_travel)")
+________________________________________
+#app.py 
+from etl.extract import fetch_data
+from etl.transform import clean_data
+from etl.load import load_to_mysql
+def main():
+    print(" Starting ETL process...")
+    df = fetch_data()
+    df_clean = clean_data(df)
+    load_to_mysql(df_clean,
+                  user="root",      # update if needed
+                  password="your_password",  # update if needed
+                  host="mysql",        # service name in Docker Compose
+                  port=3306,
+                  database="etl_db")   # make sure database exists
+
+    print(" ETL pipeline finished successfully.")
+if __name__ == "__main__":
+    main()
+________________________________________
+#requirements.txt 
+pandas
+requests
+SQLAlchemy
+pymysql
+________________________________________
+#Dockerfile 
+FROM python:3.10-slim
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY . .
+CMD ["python", "app.py"]
+________________________________________
+Database Setup (MySQL)
+Before running the container, make sure MySQL has the database ready:
+CREATE DATABASE etl_db;
+GRANT ALL PRIVILEGES ON etl_db.* TO 'airflow'@'%' IDENTIFIED BY 'airflow';
+FLUSH PRIVILEGES;
+-------------------------------------------
+Run the container
+If MySQL is running in Docker Compose with service name mysql:
+docker build -t python-etl-app .
+docker run --rm --network <your_docker_network> python-etl-app
+ Replace <your_docker_network> with the network name where mysql is running (often airflow_default or bridge).
+docker network ls
+________________________________________
+After execution, the MySQL table air_travel will be created inside etl_db.
