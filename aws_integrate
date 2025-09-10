@@ -1,0 +1,232 @@
+
+ Directory Structure
+python-etl-app/
+│
+├── etl/                        # Package for ETL modules
+│   ├── __init__.py
+│   ├── extract.py
+│   ├── transform.py
+│   ├── load.py
+│   └── upload_s3.py
+│
+├── app.py                      # Entry point to orchestrate ETL
+├── requirements.txt            # Python dependencies
+├── Dockerfile                  # Docker build instructions
+├── docker-compose.yaml         # Multi-container setup
+├── .env                        # AWS keys & secrets
+└── README.md                   # Documentation
+________________________________________
+etl/extract.py
+import requests
+import pandas as pd
+from io import StringIO
+
+def fetch_data():
+    url = "https://people.sc.fsu.edu/~jburkardt/data/csv/airtravel.csv"
+    response = requests.get(url)
+    if response.status_code != 200:
+        raise Exception(f"Failed to fetch data: {response.status_code}")
+
+    data = StringIO(response.text)
+    df = pd.read_csv(data)
+    print("Data extracted successfully.")
+    return df
+________________________________________
+etl/transform.py
+import pandas as pd
+
+def clean_data(df: pd.DataFrame):
+    df = df.rename(columns={df.columns[0]: "Month"})
+    df = df.dropna()
+    print(" Data transformed successfully.")
+    return df
+________________________________________
+ etl/load.py
+import pandas as pd
+from sqlalchemy import create_engine
+
+def load_to_mysql(df: pd.DataFrame,
+                  user="airflow",
+                  password="airflow",
+                  host="mysql",
+                  port=3306,
+                  database="etl_db"):
+    engine = create_engine(f"mysql+pymysql://{user}:{password}@{host}:{port}/{database}")
+    df.to_sql("air_travel", con=engine, if_exists="replace", index=False)
+    print(f" Data loaded successfully into MySQL `{database}` (table: air_travel)")
+________________________________________
+ etl/upload_s3.py
+import boto3
+import os
+
+def upload_to_s3(file_path):
+    s3 = boto3.client("s3",
+                      aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+                      aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+                      region_name=os.getenv("AWS_DEFAULT_REGION", "ap-south-1"))
+
+    bucket = os.getenv("S3_BUCKET")
+    key = os.path.basename(file_path)
+
+    s3.upload_file(file_path, bucket, key)
+    print(f"Uploaded {file_path} to s3://{bucket}/{key}")
+________________________________________
+ app.py
+import os
+from etl.extract import fetch_data
+from etl.transform import clean_data
+from etl.load import load_to_mysql
+from etl.upload_s3 import upload_to_s3
+
+def main():
+    print("Starting ETL process...")
+
+    df = fetch_data()
+    df_clean = clean_data(df)
+
+    # Save cleaned CSV locally
+    output_file = "/app/cleaned_airtravel.csv"
+    df_clean.to_csv(output_file, index=False)
+
+    # Load to MySQL
+    load_to_mysql(df_clean,
+                  user=os.getenv("MYSQL_USER", "airflow"),
+                  password=os.getenv("MYSQL_PASSWORD", "airflow"),
+                  host=os.getenv("MYSQL_HOST", "mysql"),
+                  port=int(os.getenv("MYSQL_PORT", 3306)),
+                  database=os.getenv("MYSQL_DB", "etl_db"))
+
+    # Upload to S3
+    upload_to_s3(output_file)
+
+    print(" ETL pipeline finished successfully.")
+
+if __name__ == "__main__":
+    main()
+________________________________________
+ requirements.txt
+pandas
+requests
+SQLAlchemy
+pymysql
+boto3
+________________________________________
+ Dockerfile
+FROM python:3.10-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+CMD ["python", "app.py"]
+________________________________________
+ docker-compose.yaml
+version: "3.9"
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: mysql_db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass
+      MYSQL_DATABASE: etl_db
+      MYSQL_USER: airflow
+      MYSQL_PASSWORD: airflow
+    ports:
+      - "3306:3306"
+    networks:
+      - etl-net
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+  etl-app:
+    build: .
+    container_name: etl_container
+    depends_on:
+      - mysql
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_USER: airflow
+      MYSQL_PASSWORD: airflow
+      MYSQL_DB: etl_db
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_DEFAULT_REGION: ap-south-1
+      S3_BUCKET: my-etl-bucket-2025
+    networks:
+      - etl-net
+
+networks:
+  etl-net:
+
+volumes:
+  mysql_data:
+________________________________________
+ .env
+AWS_ACCESS_KEY_ID=your_access_key_here
+AWS_SECRET_ACCESS_KEY=your_secret_key_here
+
+ Now your application side is ready.
+
+Step 1: Create an S3 Bucket in AWS Console
+1.	Log in to the AWS Management Console → Go to S3 service.
+2.	Click Create bucket.
+3.	Enter a unique bucket name → e.g. my-etl-bucket-2025.
+o	Bucket names must be globally unique.
+4.	Choose a region → e.g. Asia Pacific (Mumbai) ap-south-1 (keep consistent with Docker .env).
+5.	Options:
+o	Block Public Access → Keep ON (recommended for security).
+o	Versioning → Optional.
+6.	Click Create bucket.
+Your S3 bucket is ready.
+________________________________________
+ Step 2: Create an IAM User for Programmatic Access
+1.	Go to IAM in AWS Console.
+2.	Click Users → Add user.
+3.	Username: etl-user (any name).
+4.	Select access type → Check Programmatic access (this generates Access Key + Secret).
+5.	Click Next → Attach policies.
+6.	Choose AmazonS3FullAccess policy (for simplicity; later you can restrict to only one bucket).
+7.	Click Next → Create User.
+ AWS will now give you:
+•	Access Key ID
+•	Secret Access Key
+Copy & save these immediately (you won’t see the secret again).
+________________________________________
+ Step 3: Configure on Windows VM
+Option 1: Use Environment Variables (for Docker .env)
+1.	Open your project folder → edit the .env file.
+2.	AWS_ACCESS_KEY_ID=YOUR_ACCESS_KEY
+3.	AWS_SECRET_ACCESS_KEY=YOUR_SECRET_KEY
+4.	AWS_DEFAULT_REGION=ap-south-1
+5.	S3_BUCKET=my-etl-bucket-2025
+6.	Docker Compose will automatically inject these into your ETL container.
+________________________________________
+Option 2: Configure AWS CLI (for testing)
+1.	Install AWS CLI on your Windows VM:
+Download AWS CLI MSI
+2.	Run in PowerShell or CMD:
+3.	aws configure
+Enter:
+o	AWS Access Key ID → (from IAM)
+o	AWS Secret Access Key → (from IAM)
+o	Default region → ap-south-1
+o	Output format → json
+4.	Test with:
+5.	aws s3 ls
+6.	aws s3 ls s3://my-etl-bucket-2025
+________________________________________
+ Step 4: Run ETL with Docker
+1.	Build and start services:
+2.	docker-compose up --build
+3.	ETL runs:
+o	Fetch CSV → transform → load into MySQL (etl_db.air_travel)
+o	Save cleaned CSV → upload to S3 (s3://my-etl-bucket-2025/cleaned_airtravel.csv)
+________________________________________
+ After execution, you can go to S3 Console → your bucket → Objects and see cleaned_airtravel.csv
+
