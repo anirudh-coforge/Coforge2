@@ -1,0 +1,54 @@
+Dask is a flexible library for parallel computing in Python. Dask is composed of two parts:
+
+Dynamic task scheduling optimized for computation and interactive computational workloads.
+The central dask-scheduler process coordinates the actions of several dask-worker processes
+spread across multiple machines and the concurrent requests of several clients.
+Big Data collections like parallel arrays, dataframes, and lists that extend common
+interfaces like NumPy, Pandas, or Python iterators to distributed environments.
+These parallel collections run on top of dynamic task schedulers.
+'''
+
+import dask.dataframe as dd
+import pandas as pd
+import numpy as np
+import time
+import warnings
+
+warnings.simplefilter(action="ignore", category=FutureWarning)
+
+# ------------------ Generate large dataset ------------------
+N = 10_000_000  # 10 million rows
+df = pd.DataFrame({
+    "id": range(1, N + 1),
+    "salary": np.random.randint(20000, 100000, size=N)
+})
+
+# Convert to Dask DataFrame with 4 partitions (adjust partitions for your CPU cores)
+ddf = dd.from_pandas(df, npartitions=4)
+
+# ------------------ Transformation Function ------------------
+def transform(df):
+    df = df.copy()  # ensure we're working on a copy
+    df.loc[:, "bonus"] = df["salary"] * 0.1
+    df.loc[:, "normalized"] = (df["salary"] - df["salary"].mean()) / df["salary"].std()
+    df.loc[:, "log_salary"] = np.log(df["salary"])
+    df.loc[:, "complex_calc"] = df["salary"] ** 1.5 / 100
+    return df
+
+# ------------------ Sequential processing (for comparison) ------------------
+start_seq = time.time()
+df_seq = transform(df)  # pandas dataframe
+end_seq = time.time()
+print(f"Sequential processing time: {end_seq - start_seq:.4f} seconds")
+
+# ------------------ Parallel processing with Dask ------------------
+start_par = time.time()
+ddf_transformed = ddf.map_partitions(transform)
+final_par = ddf_transformed.compute()  # triggers actual computation
+end_par = time.time()
+print(f"Parallel processing time with Dask: {end_par - start_par:.4f} seconds")
+
+# ------------------ Display top rows ------------------
+print(final_par.head(10))
+
+
