@@ -1,0 +1,153 @@
+Dask is a flexible library for parallel computing in Python. Dask is composed of two parts:
+
+Dynamic task scheduling optimized for computation and interactive computational workloads.
+The central dask-scheduler process coordinates the actions of several dask-worker processes
+spread across multiple machines and the concurrent requests of several clients.
+Big Data collections like parallel arrays, dataframes, and lists that extend common
+interfaces like NumPy, Pandas, or Python iterators to distributed environments.
+These parallel collections run on top of dynamic task schedulers.
+'''
+
+import dask.dataframe as dd
+import pandas as pd
+import numpy as np
+import time
+import warnings
+
+warnings.simplefilter(action="ignore", category=FutureWarning)
+
+# ------------------ Generate large dataset ------------------
+N = 10_000_000  # 10 million rows
+df = pd.DataFrame({
+    "id": range(1, N + 1),
+    "salary": np.random.randint(20000, 100000, size=N)
+})
+
+# Convert to Dask DataFrame with 4 partitions (adjust partitions for your CPU cores)
+ddf = dd.from_pandas(df, npartitions=4)
+
+# ------------------ Transformation Function ------------------
+def transform(df):
+    df = df.copy()  # ensure we're working on a copy
+    df.loc[:, "bonus"] = df["salary"] * 0.1
+    df.loc[:, "normalized"] = (df["salary"] - df["salary"].mean()) / df["salary"].std()
+    df.loc[:, "log_salary"] = np.log(df["salary"])
+    df.loc[:, "complex_calc"] = df["salary"] ** 1.5 / 100
+    return df
+
+# ------------------ Sequential processing (for comparison) ------------------
+start_seq = time.time()
+df_seq = transform(df)  # pandas dataframe
+end_seq = time.time()
+print(f"Sequential processing time: {end_seq - start_seq:.4f} seconds")
+
+# ------------------ Parallel processing with Dask ------------------
+start_par = time.time()
+ddf_transformed = ddf.map_partitions(transform)
+final_par = ddf_transformed.compute()  # triggers actual computation
+end_par = time.time()
+print(f"Parallel processing time with Dask: {end_par - start_par:.4f} seconds")
+
+# ------------------ Display top rows ------------------
+print(final_par.head(10))
+----------------------------------------------------------------------
+
+import requests
+import pandas as pd
+import numpy as np
+import dask.dataframe as dd
+import dask.bag as db
+import time
+from sqlalchemy import create_engine, text
+import warnings
+
+warnings.simplefilter(action="ignore", category=FutureWarning)
+
+# ------------------ API SETUP ------------------
+url = "https://api.coingecko.com/api/v3/coins/markets"
+params_base = {
+    "vs_currency": "usd",
+    "order": "market_cap_desc",
+    "per_page": 250,
+    "sparkline": False
+}
+
+total_pages = 200        # demo (set 4000 in production)
+sleep_time = 1.5
+max_retries = 5
+
+# ------------------ Database connection ------------------
+mssql_engine = create_engine(
+    "mssql+pyodbc:///?odbc_connect="
+    "Driver={ODBC Driver 17 for SQL Server};"
+    "Server=DESKTOP-6B6KT5K;"
+    "Database=cryptodb;"
+    "Trusted_Connection=yes;"
+)
+
+# ------------------ Fetch Function ------------------
+def fetch_page(page):
+    """Fetch a single page with retries"""
+    params = params_base.copy()
+    params["page"] = page
+    for attempt in range(max_retries):
+        try:
+            resp = requests.get(url, params=params, timeout=15)
+            if resp.status_code == 200:
+                return resp.json()
+            elif resp.status_code == 429:
+                time.sleep((attempt + 1) * 10)
+            else:
+                return []
+        except Exception:
+            time.sleep((attempt + 1) * 5)
+    return []
+
+# ------------------ Transform Function ------------------
+def transform(df: pd.DataFrame):
+    if df.empty:
+        return df
+
+    df = df.drop_duplicates(subset="id")
+    df["price_log"] = df["current_price"].apply(lambda x: np.log(x) if x and x > 0 else None)
+    if df["total_volume"].std() > 0:
+        df["volume_normalized"] = (df["total_volume"] - df["total_volume"].mean()) / df["total_volume"].std()
+    else:
+        df["volume_normalized"] = 0
+    return df
+
+# ------------------ Dask Parallel Fetch ------------------
+# Create a bag of page numbers
+pages = list(range(1, total_pages + 1))
+bag = db.from_sequence(pages, npartitions=8)  # adjust partitions for CPU cores
+
+# Fetch JSON data in parallel
+bag_json = bag.map(fetch_page)
+
+# Convert each page’s JSON → DataFrame
+bag_df = bag_json.map(lambda js: pd.json_normalize(js) if js else pd.DataFrame())
+
+# Turn into Dask DataFrame
+ddf = dd.from_delayed(bag_df)
+
+# Apply transformation in parallel
+ddf_transformed = ddf.map_partitions(transform)
+
+# ------------------ Save to SQL ------------------
+# Compute in-memory DataFrame
+final_df = ddf_transformed.compute()
+
+# Replace table on first load
+final_df.to_sql("crypto_data", mssql_engine, if_exists="replace", index=False)
+
+print("Final row count:", len(final_df))
+
+# ------------------ Verify ------------------
+with mssql_engine.connect() as conn:
+    result = conn.execute(text("SELECT COUNT(*) FROM crypto_data"))
+    print("Row count in DB:", result.scalar())
+
+-------------------------------------------------------------------
+
+#pip install dask
+#pip install "dask[dataframe]"
