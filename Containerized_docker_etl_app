@@ -55,8 +55,8 @@ def main():
     df = fetch_data()
     df_clean = clean_data(df)
     load_to_mysql(df_clean,
-                  user="root",      # update if needed
-                  password="your_password",  # update if needed
+                  user="airflow",      # update if needed
+                  password="airflow",  # update if needed
                   host="mysql",        # service name in Docker Compose
                   port=3306,
                   database="etl_db")   # make sure database exists
@@ -83,6 +83,7 @@ Database Setup (MySQL)
 Before running the container, make sure MySQL has the database ready:
 CREATE DATABASE etl_db;
 CREATE USER 'airflow'@'%' IDENTIFIED BY 'airflow';
+Alter user 'airflow'@'%' IDENTIFIED WITH mysql_native_password BY 'airflow';
 GRANT ALL PRIVILEGES ON etl_db.* TO 'airflow'@'%';
 FLUSH PRIVILEGES;
 -------------------------------------------
