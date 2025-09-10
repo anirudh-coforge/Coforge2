@@ -1,0 +1,244 @@
+A directory structure for the ETL app.
+
+RDS setup steps in AWS console.
+
+ETL code that:
+
+Extracts → Transforms → Saves cleaned CSV → Loads into RDS.
+
+Maintains two tables:
+
+air_travel_raw → appends new CSV rows each run (historical).
+
+air_travel_clean → also appends cleaned version with timestamp (versioned cleans).
+
+A way to fetch data back from RDS for verification.
+
+ 1. Directory Structure
+python_etl_app/
+│── .env
+│── requirements.txt
+│── app.py
+│
+├── etl/
+│   ├── __init__.py
+│   ├── extract.py
+│   ├── transform.py
+│   ├── load.py
+│   ├── upload_s3.py
+
+ 2. RDS Setup in AWS Console (MySQL)
+
+Go to AWS Console → RDS → Create database
+
+Engine: MySQL
+
+Version: MySQL 8.x
+
+Templates: Free tier (if testing).
+
+DB name: etl_db
+
+Master username: airflow
+
+Master password: airflow123
+
+Connectivity
+
+Public access: Yes (for local testing).
+
+VPC security group: Add inbound rule for MySQL/Aurora (3306) → source = 0.0.0.0/0 (testing only; later restrict to your IP).
+
+Wait for RDS to be Available, then note the endpoint (e.g. mydb.c123abc.ap-south-1.rds.amazonaws.com).
+
+ 3. .env
+# AWS
+AWS_ACCESS_KEY_ID=xxxxxxxxxxxx
+AWS_SECRET_ACCESS_KEY=xxxxxxxxxxxx
+AWS_DEFAULT_REGION=ap-south-1
+S3_BUCKET=my-etl-bucket1-2025
+
+# RDS MySQL
+MYSQL_HOST=mydb.c123abc.ap-south-1.rds.amazonaws.com
+MYSQL_PORT=3306
+MYSQL_USER=airflow
+MYSQL_PASSWORD=airflow123
+MYSQL_DB=etl_db
+
+ 4. requirements.txt
+python-dotenv
+pandas
+requests
+SQLAlchemy
+pymysql
+boto3
+cryptography
+
+ 5. etl/extract.py
+import pandas as pd
+
+def fetch_data():
+    # Example static dataset
+    data = {
+        "Month": ["JAN", "FEB", "MAR"],
+        "Passengers": [112, 118, 132]
+    }
+    df = pd.DataFrame(data)
+    print(" Data extracted successfully.")
+    return df
+
+ 6. etl/transform.py
+import pandas as pd
+
+def clean_data(df: pd.DataFrame):
+    # Example transform: rename column + uppercase month
+    df = df.rename(columns={"Passengers": "Total_Passengers"})
+    df["Month"] = df["Month"].str.upper()
+    print(" Data transformed successfully.")
+    return df
+
+ 7. etl/load.py
+import pandas as pd
+from sqlalchemy import create_engine
+from datetime import datetime
+
+def get_engine(user, password, host, port, database):
+    return create_engine(f"mysql+pymysql://{user}:{password}@{host}:{port}/{database}")
+
+
+def load_to_mysql(df: pd.DataFrame,
+                  user, password, host, port, database,
+                  table_name="air_travel_clean",
+                  mode="append"):
+    """Load cleaned DataFrame into MySQL/RDS (append with timestamp)."""
+    try:
+        df["etl_run_ts"] = datetime.utcnow()
+        engine = get_engine(user, password, host, port, database)
+        df.to_sql(table_name, con=engine, if_exists=mode, index=False)
+        print(f" Clean data appended to RDS `{database}` (table: {table_name})")
+    except Exception as e:
+        print(f" Error loading clean data: {e}")
+
+
+def load_csv_to_mysql(csv_file,
+                      user, password, host, port, database,
+                      table_name="air_travel_raw",
+                      mode="append"):
+    """Load raw CSV into MySQL/RDS (append as historical log)."""
+    try:
+        df = pd.read_csv(csv_file)
+        df["etl_run_ts"] = datetime.utcnow()
+        engine = get_engine(user, password, host, port, database)
+        df.to_sql(table_name, con=engine, if_exists=mode, index=False)
+        print(f" Raw CSV appended to RDS `{database}` (table: {table_name})")
+    except Exception as e:
+        print(f" Error loading raw CSV: {e}")
+
+ 8. etl/upload_s3.py
+import boto3
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+def upload_to_s3(file_path):
+    s3 = boto3.client("s3",
+                      aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+                      aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+                      region_name=os.getenv("AWS_DEFAULT_REGION", "ap-south-1"))
+    bucket = os.getenv("S3_BUCKET")
+    key = os.path.basename(file_path)
+
+    s3.upload_file(file_path, bucket, key)
+    print(f" Uploaded {file_path} to s3://{bucket}/{key}")
+
+ 9. app.py
+import os
+import pandas as pd
+from dotenv import load_dotenv
+from etl.extract import fetch_data
+from etl.transform import clean_data
+from etl.load import load_to_mysql, load_csv_to_mysql
+from etl.upload_s3 import upload_to_s3
+
+load_dotenv()
+
+def main():
+    print("🚀 Starting ETL pipeline...")
+
+    # Extract
+    df = fetch_data()
+
+    # Transform
+    df_clean = clean_data(df)
+
+    # Save cleaned CSV locally
+    output_file = "cleaned_air_aws.csv"
+    df_clean.to_csv(output_file, index=False)
+    print(f"Cleaned data saved to {output_file}")
+
+    # Load raw CSV into RDS (append)
+    load_csv_to_mysql(output_file,
+                      user=os.getenv("MYSQL_USER"),
+                      password=os.getenv("MYSQL_PASSWORD"),
+                      host=os.getenv("MYSQL_HOST"),
+                      port=int(os.getenv("MYSQL_PORT")),
+                      database=os.getenv("MYSQL_DB"))
+
+    # Load cleaned DataFrame into RDS (append)
+    load_to_mysql(df_clean,
+                  user=os.getenv("MYSQL_USER"),
+                  password=os.getenv("MYSQL_PASSWORD"),
+                  host=os.getenv("MYSQL_HOST"),
+                  port=int(os.getenv("MYSQL_PORT")),
+                  database=os.getenv("MYSQL_DB"))
+
+    # Upload to S3
+    upload_to_s3(output_file)
+
+    print(" ETL pipeline finished successfully.")
+
+if __name__ == "__main__":
+    main()
+
+ 10. Fetch Data Back from RDS
+
+Example script fetch_from_rds.py:
+
+import os
+import pandas as pd
+from sqlalchemy import create_engine
+from dotenv import load_dotenv
+
+load_dotenv()
+
+engine = create_engine(
+    f"mysql+pymysql://{os.getenv('MYSQL_USER')}:{os.getenv('MYSQL_PASSWORD')}@"
+    f"{os.getenv('MYSQL_HOST')}:{os.getenv('MYSQL_PORT')}/{os.getenv('MYSQL_DB')}"
+)
+
+# Fetch historical raw data
+df_raw = pd.read_sql("SELECT * FROM air_travel_raw", con=engine)
+print(" Raw table sample:")
+print(df_raw.head())
+
+# Fetch versioned clean data
+df_clean = pd.read_sql("SELECT * FROM air_travel_clean", con=engine)
+print("\n Clean table sample:")
+print(df_clean.head())
+
+
+Run with:
+
+python fetch_from_rds.py
+
+
+# Now your pipeline:
+
+Extracts + Transforms
+
+Saves locally + pushes to S3
+
+Pushes raw + clean (versioned) tables into RDS
+
+You can fetch back with Pandas
