@@ -147,4 +147,7 @@ with mssql_engine.connect() as conn:
     result = conn.execute(text("SELECT COUNT(*) FROM crypto_data"))
     print("Row count in DB:", result.scalar())
 
+-------------------------------------------------------------------
 
+#pip install dask
+#pip install "dask[dataframe]"
