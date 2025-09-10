@@ -16,34 +16,47 @@ python-etl-app/
 ├── .env                        # AWS keys & secrets
 └── README.md                   # Documentation
 ________________________________________
-etl/extract.py
-import requests
+# etl/extract.py
+
 import pandas as pd
-from io import StringIO
-
-def fetch_data():
-    url = "https://people.sc.fsu.edu/~jburkardt/data/csv/airtravel.csv"
-    response = requests.get(url)
-    if response.status_code != 200:
-        raise Exception(f"Failed to fetch data: {response.status_code}")
-
-    data = StringIO(response.text)
-    df = pd.read_csv(data)
-    print("Data extracted successfully.")
-    return df
-________________________________________
-etl/transform.py
-import pandas as pd
-
-def clean_data(df: pd.DataFrame):
+def clean_data(df:pd.DataFrame):
     df = df.rename(columns={df.columns[0]: "Month"})
-    df = df.dropna()
+    df = df.dropna()  # Drop missing rows
     print(" Data transformed successfully.")
     return df
 ________________________________________
- etl/load.py
+# etl/transform.py
+
 import pandas as pd
+def clean_data(df:pd.DataFrame):
+    df = df.rename(columns={df.columns[0]: "Month"})
+    df = df.dropna()  # Drop missing rows
+    print(" Data transformed successfully.")
+    return df
+________________________________________
+# etl/load.py
+
+import time
+import pandas as pd
+import pymysql
 from sqlalchemy import create_engine
+
+def wait_for_mysql(user, password, host, port, database, retries=10, delay=5):
+    """Retry MySQL connection until it becomes available."""
+    for attempt in range(1, retries + 1):
+        try:
+            print(f"Attempt {attempt}: Connecting to MySQL at {host}:{port}...")
+            conn = pymysql.connect(
+                host=host, user=user, password=password, database=database, port=port
+            )
+            conn.close()
+            print(" MySQL is ready!")
+            return True
+        except Exception as e:
+            print(f"MySQL not ready ({e}), retrying in {delay}s...")
+            time.sleep(delay)
+    print(" MySQL connection failed after retries.")
+    return False
 
 def load_to_mysql(df: pd.DataFrame,
                   user="airflow",
@@ -51,19 +64,28 @@ def load_to_mysql(df: pd.DataFrame,
                   host="mysql",
                   port=3306,
                   database="etl_db"):
+    if not wait_for_mysql(user, password, host, port, database):
+        raise SystemExit("Could not connect to MySQL after retries.")
     engine = create_engine(f"mysql+pymysql://{user}:{password}@{host}:{port}/{database}")
-    df.to_sql("air_travel", con=engine, if_exists="replace", index=False)
-    print(f" Data loaded successfully into MySQL `{database}` (table: air_travel)")
+    df.to_sql("air_travel_aws", con=engine, if_exists="replace", index=False)
+    print(f"Data loaded successfully into MySQL `{database}` (table: air_travel_aws)")
+
 ________________________________________
- etl/upload_s3.py
+# etl/upload_s3.py
 import boto3
 import os
+from dotenv import load_dotenv
+
+# Load variables from .env into environment
+load_dotenv()
 
 def upload_to_s3(file_path):
-    s3 = boto3.client("s3",
-                      aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
-                      aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
-                      region_name=os.getenv("AWS_DEFAULT_REGION", "ap-south-1"))
+    s3 = boto3.client(
+        "s3",
+        aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+        aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+        region_name=os.getenv("AWS_DEFAULT_REGION", "ap-south-1")
+    )
 
     bucket = os.getenv("S3_BUCKET")
     key = os.path.basename(file_path)
@@ -71,45 +93,56 @@ def upload_to_s3(file_path):
     s3.upload_file(file_path, bucket, key)
     print(f"Uploaded {file_path} to s3://{bucket}/{key}")
 ________________________________________
- app.py
+# app.py
+
 import os
 from etl.extract import fetch_data
 from etl.transform import clean_data
 from etl.load import load_to_mysql
 from etl.upload_s3 import upload_to_s3
 
+
 def main():
     print("Starting ETL process...")
 
+    # Extract
     df = fetch_data()
+
+    # Transform
     df_clean = clean_data(df)
 
     # Save cleaned CSV locally
-    output_file = "/app/cleaned_airtravel.csv"
+    output_file = "/app/cleaned_air_aws.csv"
     df_clean.to_csv(output_file, index=False)
+    print(f"Cleaned data saved to {output_file}")
 
-    # Load to MySQL
-    load_to_mysql(df_clean,
-                  user=os.getenv("MYSQL_USER", "airflow"),
-                  password=os.getenv("MYSQL_PASSWORD", "airflow"),
-                  host=os.getenv("MYSQL_HOST", "mysql"),
-                  port=int(os.getenv("MYSQL_PORT", 3306)),
-                  database=os.getenv("MYSQL_DB", "etl_db"))
-
+    # Load to MySQL (with retry logic inside load_to_mysql)
+    load_to_mysql(
+        df_clean,
+        user=os.getenv("MYSQL_USER", "airflow"),
+        password=os.getenv("MYSQL_PASSWORD", "airflow"),
+        host=os.getenv("MYSQL_HOST", "mysql"),
+        port=int(os.getenv("MYSQL_PORT", 3306)),
+        database=os.getenv("MYSQL_DB", "etl_db")
+    )
     # Upload to S3
     upload_to_s3(output_file)
 
-    print(" ETL pipeline finished successfully.")
+    print("ETL pipeline finished successfully.")
 
 if __name__ == "__main__":
     main()
 ________________________________________
- requirements.txt
+# requirements.txt
+
+python-dotenv
 pandas
 requests
 SQLAlchemy
 pymysql
 boto3
+cryptography
+
 ________________________________________
  Dockerfile
 FROM python:3.10-slim
@@ -123,8 +156,7 @@ COPY . .
 
 CMD ["python", "app.py"]
 ________________________________________
- docker-compose.yaml
-version: "3.9"
+# docker-compose.yaml
 
 services:
   mysql:
@@ -132,7 +164,7 @@ services:
     container_name: mysql_db
     restart: always
     environment:
-      MYSQL_ROOT_PASSWORD: rootpass
+      MYSQL_ROOT_PASSWORD: thinknyx@123
       MYSQL_DATABASE: etl_db
       MYSQL_USER: airflow
       MYSQL_PASSWORD: airflow
@@ -157,7 +189,7 @@ services:
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
       AWS_DEFAULT_REGION: ap-south-1
-      S3_BUCKET: my-etl-bucket-2025
+      S3_BUCKET: my-etl-bucket1-2025
     networks:
       - etl-net
 
@@ -170,13 +202,21 @@ ________________________________________
  .env
 AWS_ACCESS_KEY_ID=your_access_key_here
 AWS_SECRET_ACCESS_KEY=your_secret_key_here
+AWS_DEFAULT_REGION=ap-south-1
+S3_BUCKET=my-etl-bucket1-2025
+-------------------------------------
+To Build image:
+docker-compose up --build 
+
+to run container:
+docker-compose up -d
 
  Now your application side is ready.
 
 Step 1: Create an S3 Bucket in AWS Console
 1.	Log in to the AWS Management Console → Go to S3 service.
 2.	Click Create bucket.
-3.	Enter a unique bucket name → e.g. my-etl-bucket-2025.
+3.	Enter a unique bucket name → e.g. my-etl-bucket1-2025
 o	Bucket names must be globally unique.
 4.	Choose a region → e.g. Asia Pacific (Mumbai) ap-south-1 (keep consistent with Docker .env).
 5.	Options:
@@ -204,7 +244,7 @@ Option 1: Use Environment Variables (for Docker .env)
 2.	AWS_ACCESS_KEY_ID=YOUR_ACCESS_KEY
 3.	AWS_SECRET_ACCESS_KEY=YOUR_SECRET_KEY
 4.	AWS_DEFAULT_REGION=ap-south-1
-5.	S3_BUCKET=my-etl-bucket-2025
+5.	S3_BUCKET=my-etl-bucket1-2025
 6.	Docker Compose will automatically inject these into your ETL container.
 ________________________________________
 Option 2: Configure AWS CLI (for testing)
@@ -219,14 +259,30 @@ o	Default region → ap-south-1
 o	Output format → json
 4.	Test with:
 5.	aws s3 ls
-6.	aws s3 ls s3://my-etl-bucket-2025
+6.	aws s3 ls s3://my-etl-bucket1-2025
 ________________________________________
  Step 4: Run ETL with Docker
 1.	Build and start services:
 2.	docker-compose up --build
 3.	ETL runs:
-o	Fetch CSV → transform → load into MySQL (etl_db.air_travel)
-o	Save cleaned CSV → upload to S3 (s3://my-etl-bucket-2025/cleaned_airtravel.csv)
+o	Fetch CSV → transform → load into MySQL (etl_db.air_travel_aws)
+o	Save cleaned CSV → upload to S3 (s3://my-etl-bucket1-2025/cleaned_air_aws.csv)
 ________________________________________
  After execution, you can go to S3 Console → your bucket → Objects and see cleaned_airtravel.csv
+
+List the file(s):
+
+aws s3 ls s3://my-etl-bucket1-2025/
+
+Download to local machine:
+
+aws s3 cp s3://my-etl-bucket1-2025/cleaned_air_aws.csv .
+
+Then open it in Excel / VS Code / Notepad.
+
+Or stream it directly:
+
+aws s3 cp s3://my-etl-bucket1-2025/cleaned_air_aws - | more
+
+
 
