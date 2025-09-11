@@ -18,11 +18,19 @@ python-etl-app/
 ________________________________________
 # etl/extract.py
 
+import requests
 import pandas as pd
-def clean_data(df:pd.DataFrame):
-    df = df.rename(columns={df.columns[0]: "Month"})
-    df = df.dropna()  # Drop missing rows
-    print(" Data transformed successfully.")
+from io import StringIO
+
+def fetch_data():
+    url = "https://people.sc.fsu.edu/~jburkardt/data/csv/airtravel.csv"
+    response = requests.get(url)
+    if response.status_code != 200:
+        raise Exception(f"Failed to fetch data: {response.status_code}")
+
+    data = StringIO(response.text)
+    df = pd.read_csv(data)
+    print("Data extracted successfully.")
     return df
 ________________________________________
 # etl/transform.py
