@@ -1,0 +1,173 @@
+Step 1: Sample cleaned_data.csv
+
+Let’s prepare a small dataset (data/cleaned_data.csv) that you’ll insert into RDS:
+
+id,product,price
+1,Laptop,800.50
+2,Mouse,25.75
+3,Keyboard,45.00
+4,Monitor,200.99
+5,Headphones,59.99
+
+
+Save it under:
+
+C:\Users\student\etl_project\data\cleaned_data.csv
+
+CREATE USER 'etl_user'@'%' IDENTIFIED BY 'YourRdsPassword';
+GRANT INSERT, SELECT, UPDATE, DELETE ON etl_db.* TO 'etl_user'@'%';
+FLUSH PRIVILEGES;
+
+Step 2: Python Script (Create Table + Insert Data)
+
+Create a file load_to_rds.py in the same project folder:
+import pymysql
+import pandas as pd
+# --- RDS Connection Details ---
+HOST = "mydb-instance.cdjf123.amazonaws.com"   # Replace with your RDS endpoint
+USER = "etl_user"                                           # User you created
+PASSWORD = "mypassword"                        # User password
+DATABASE = "etl_db"                                  # Database name
+PORT = 3306
+
+# --- Connect to RDS ---
+conn = pymysql.connect(
+    host=HOST,
+    user=USER,
+    password=PASSWORD,
+    database=DATABASE,
+    port=PORT
+)
+
+cursor = conn.cursor()
+
+# --- Step 1: Create table if not exists ---
+create_table_sql = """
+CREATE TABLE IF NOT EXISTS sales (
+    id INT PRIMARY KEY,
+    product VARCHAR(255),
+    price DECIMAL(10,2)
+);
+"""
+cursor.execute(create_table_sql)
+print(" Table 'sales' ensured in RDS")
+
+# --- Step 2: Load CSV ---
+df = pd.read_csv("data/cleaned_data.csv")
+print(f" Loaded {len(df)} rows from CSV")
+
+# --- Step 3: Insert rows into RDS ---
+for _, row in df.iterrows():
+    cursor.execute(
+        "REPLACE INTO sales (id, product, price) VALUES (%s, %s, %s)",
+        (int(row["id"]), row["product"], float(row["price"]))
+    )
+
+conn.commit()
+print(" Data inserted into RDS MySQL")
+
+# --- Cleanup ---
+cursor.close()
+conn.close()
+
+ Step 3: Install Python Dependencies
+
+In your Windows VM PowerShell:
+pip install pandas pymysql
+ Step 4: Run the Script
+From inside your project folder:
+python load_to_rds.py
+
+Result:
+
+Table 'sales' ensured in RDS
+ Loaded 5 rows from CSV
+ Data inserted into RDS MySQL
+
+ Step 5: Verify in RDS
+
+Connect to RDS (from MySQL Workbench, CLI, or AWS Query Editor):
+
+SELECT * FROM sales;
+
+
+Expected result:
+
+id	product	price
+1	Laptop	800.50
+2	Mouse	25.75
+3	Keyboard	45.00
+4	Monitor	200.99
+5	Headphones	59.99
+
+Here are your options from Windows VM:
+
+ 1. Install MySQL Client (if not installed)
+
+Download the MySQL Community client from:
+ https://dev.mysql.com/downloads/mysql/
+
+Or use MySQL Workbench (GUI). For CLI, ensure mysql is in PATH.
+
+Check installation:
+
+mysql --version
+
+ 2. Connect to RDS from Windows VM (CLI)
+
+Use the RDS endpoint from AWS Console → RDS → Databases → <your-instance> → Connectivity & security.
+
+mysql -h mydb-instance.cdjf123.amazonaws.com -u etl_user -p -P 3306 etl_db
+
+It will prompt for your etl_user password.
+
+ 3. Run Queries
+
+Once connected:
+
+USE etl_db;
+SHOW TABLES;
+SELECT * FROM sales;
+
+
+ output:
+
++----+------------+--------+
+| id | product    | price  |
++----+------------+--------+
+|  1 | Laptop     | 800.50 |
+|  2 | Mouse      |  25.75 |
+|  3 | Keyboard   |  45.00 |
+|  4 | Monitor    | 200.99 |
+|  5 | Headphones |  59.99 |
++----+------------+--------+
+
+ 4. (Optional) Use MySQL Workbench
+
+If you prefer GUI:
+
+Open Workbench → Database → Connect to Database.
+
+Enter:
+
+Hostname: your RDS endpoint
+
+Port: 3306
+
+Username: etl_user
+
+Password: your RDS password
+
+Default Schema: etl_db
+
+Click Test Connection, then OK.
+Run:
+
+SELECT * FROM sales;
+
+
+Networking reminder:
+
+In AWS Console → RDS → Security → Inbound Rules → Add MySQL/Aurora (3306) with your Windows VM public IP or 0.0.0.0/0 (only in development)
+
+Without this, your client won’t connect.
