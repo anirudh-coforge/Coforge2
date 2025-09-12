@@ -1,0 +1,94 @@
+'''SDK = Software Development Kit → set of libraries, tools, and APIs to interact with a service.
+
+AWS → boto3
+Azure → azure-storage-blob, azure-identity
+GCP → google-cloud-storage, google-cloud-bigquery
+Why use SDKs in ETL?
+Extract: Pull raw data from APIs or cloud storage.
+Transform: Process/clean data locally or in cloud compute services (Lambda, Dataproc, etc.).
+Load: Push data into S3, RDS, BigQuery, Azure SQL, etc.
+Advantages
+Secure authentication (IAM roles, service accounts).
+Handles retries, large object uploads.
+Works with multiple services in a single pipeline.
+
+#Uploading a File to AWS S3 with boto3
+import boto3
+import os
+
+# Create S3 client
+s3 = boto3.client(
+    "s3",
+    aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+    aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+    region_name="ap-south-1"
+)
+
+# Bucket and file details
+bucket = "my-etl-bucket1-2025"
+file_path = "data/cleaned_data.csv"
+key = "etl/cleaned_data.csv"
+
+# Upload
+s3.upload_file(file_path, bucket, key)
+print(f"Uploaded to s3://{bucket}/{key}")
+
+#Downloading from S3
+s3.download_file(bucket, key, "downloaded_cleaned_data.csv")
+print("File downloaded locally.")
+'''
+#Loading Data into AWS RDS (MySQL)
+#IAM users/roles are used for AWS services access (e.g., S3, Lambda, Glue).
+import pymysql
+import pandas as pd
+
+# DB Connection
+conn = pymysql.connect(
+    host="mydb-instance.cdjf123.amazonaws.com",
+    user="etl_user",
+    password="mypassword",
+    database="etl_db"
+)
+
+# Load cleaned CSV into DataFrame
+df = pd.read_csv("data/cleaned_data.csv")
+
+# Insert into RDS
+cursor = conn.cursor()
+for _, row in df.iterrows():
+    cursor.execute(
+        "INSERT INTO sales (id, product, price) VALUES (%s, %s, %s)",
+        (row["id"], row["product"], row["price"])
+    )
+conn.commit()
+cursor.close()
+conn.close()
+
+print("Data loaded into RDS MySQL")
+
+'''#GCP Example: Upload to Google Cloud Storage
+from google.cloud import storage
+
+client = storage.Client()
+bucket = client.bucket("my-etl-gcs-bucket")
+blob = bucket.blob("etl/cleaned_data.csv")
+
+blob.upload_from_filename("data/cleaned_data.csv")
+print("File uploaded to GCS.")
+
+
+
+
+#Azure Example: Upload to Azure Blob Storage
+from azure.storage.blob import BlobServiceClient
+
+conn_str = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
+blob_service_client = BlobServiceClient.from_connection_string(conn_str)
+
+container_name = "etl-container"
+blob_client = blob_service_client.get_blob_client(container=container_name, blob="etl/cleaned_data.csv")
+
+with open("data/cleaned_data.csv", "rb") as data:
+    blob_client.upload_blob(data, overwrite=True)
+
+print("File uploaded to Azure Blob Storage")'''
