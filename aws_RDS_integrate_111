@@ -171,3 +171,5 @@ Networking reminder:
 In AWS Console → RDS → Security → Inbound Rules → Add MySQL/Aurora (3306) with your Windows VM public IP or 0.0.0.0/0 (only in development)
 
 Without this, your client won’t connect.
+
+etl-database-1.cxmoiassqp3f.ap-south-1.rds.amazonaws.com
