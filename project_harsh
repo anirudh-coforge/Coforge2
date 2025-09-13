@@ -1,0 +1,317 @@
+import os
+import shutil
+import subprocess
+from pathlib import Path
+from typing import Optional, List
+
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+import random
+import tqdm as tq
+
+
+os.environ['KAGGLE_USERNAME'] = 'harshvardhangupta15'
+os.environ['KAGGLE_KEY'] = '55e5d21ededb86fa4797d2d6de2a3fd4'
+
+sns.set(style="whitegrid")
+
+
+class Extract:
+    def __init__(
+        self,
+        dataset: str = "sobhanmoosavi/us-accidents",
+        extract_dir: str = r"D:\OneDrive - Coforge Limited\Desktop\harshfinalproject\us_accidents",
+        delete_zip_after_unzip: bool = True,
+        encoding: str = "utf-8",
+        verbose: bool = True,
+    ):
+        self.dataset = dataset
+        self.extract_dir = Path(extract_dir)
+        self.extract_dir.mkdir(parents=True, exist_ok=True)
+        self.delete_zip_after_unzip = delete_zip_after_unzip
+        self.encoding = encoding
+        self.verbose = verbose
+
+        # 1) Check Kaggle CLI
+        if shutil.which("kaggle") is None:
+            raise EnvironmentError(
+                "Kaggle CLI not found. Install with 'pip install kaggle' and ensure 'kaggle' is on PATH.\n"
+               
+            )
+
+        # 2) If no CSV yet, download and unzip
+        if not self._has_csv_in_dir():
+            if self.verbose:
+                print(f"Downloading {self.dataset} to: {self.extract_dir}")
+            cmd = [
+                "kaggle", "datasets", "download",
+                "-d", self.dataset,
+                "-p", str(self.extract_dir),
+                "--unzip"
+            ]
+            result = subprocess.run(cmd, capture_output=True, text=True)
+
+            if result.returncode != 0:
+                raise RuntimeError(
+                    "Kaggle download failed.\n"
+                    f"STDOUT:\n{result.stdout}\n\nSTDERR:\n{result.stderr}\n\n"
+                    "Check Kaggle credentials and dataset slug."
+                )
+
+            if self.verbose:
+                print("Download and unzip complete.")
+
+            if self.delete_zip_after_unzip:
+                for z in self.extract_dir.glob("*.zip"):
+                    try:
+                        z.unlink()
+                    except Exception:
+                        pass
+
+        # 3) Locate the US Accidents CSV
+        csv_path = self._find_accidents_csv()
+        if not csv_path:
+            raise FileNotFoundError(
+                f"No US_Accidents*.csv found in {self.extract_dir}. "
+                "Please verify the dataset contents."
+            )
+
+        self.csv_path = str(csv_path)
+        if self.verbose:
+            print(f"Using CSV: {self.csv_path}")
+
+        # 4) Load the CSV with a robust fallback for encoding
+        try:
+            self.df = pd.read_csv(self.csv_path, encoding=self.encoding, low_memory=False)
+        except UnicodeDecodeError:
+            # Try a BOM-aware encoding if the first attempt fails
+            self.df = pd.read_csv(self.csv_path, encoding="utf-8-sig", low_memory=False)
+
+    # ----------------- NEW: helper methods that were missing -----------------
+
+    def _has_csv_in_dir(self) -> bool:
+        """
+        Returns True if any CSV that looks like the US Accidents dataset exists in extract_dir.
+        """
+        patterns: List[str] = ["US_Accidents*.csv", "*.csv"]
+        for pat in patterns:
+            if any(self.extract_dir.glob(pat)):
+                return True
+        return False
+
+    def _find_accidents_csv(self) -> Optional[Path]:
+        """
+        Returns a Path to the first CSV found (prefer US_Accidents*.csv).
+        """
+        preferred = sorted(self.extract_dir.glob("US_Accidents*.csv"))
+        if preferred:
+            # If multiple versions exist, pick the newest by name (rough heuristic)
+            return preferred[-1]
+        # Fallback to any CSV
+        any_csv = sorted(self.extract_dir.glob("*.csv"))
+        return any_csv[-1] if any_csv else None
+
+
+class Transform(Extract):
+    """
+    Cleans and transforms the dataframe; adds grouping and derived fields.
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def print_total_rows(self):
+        print(f"Total rows fetched: {len(self.df):,}")
+        print("\nHEAD:")
+        print(self.df.head())
+        print("\nMissing values per column:")
+        print(self.df.isna().sum())
+
+    def drop_duplicates(self):
+        before = len(self.df)
+        self.df = self.df.drop_duplicates(subset="ID")
+        after = len(self.df)
+        print(f"Drop duplicates on 'ID': {before:,} -> {after:,} (removed {before - after:,})")
+
+    def clean_and_groupby(self):
+        df = self.df
+
+        # Fill missing values for selected columns
+        if 'City' in df.columns:
+            df['City'] = df['City'].fillna("XYZ")
+        if 'Street' in df.columns:
+            df['Street'] = df['Street'].fillna("StreetNA")
+        if 'Zipcode' in df.columns:
+            df['Zipcode'] = df['Zipcode'].fillna("00000")
+
+        # Weather columns
+        if 'Temperature(F)' in df.columns:
+            df['Temperature(F)'] = pd.to_numeric(df['Temperature(F)'], errors='coerce')
+            df['Temperature(F)'] = df['Temperature(F)'].fillna(df['Temperature(F)'].median())
+        if 'Weather_Condition' in df.columns:
+            df['Weather_Condition'] = df['Weather_Condition'].fillna("Unknown")
+
+        # Datetime columns
+        if 'Start_Time' in df.columns:
+            df['Start_Time'] = pd.to_datetime(df['Start_Time'], errors='coerce')
+        if 'End_Time' in df.columns:
+            df['End_Time'] = pd.to_datetime(df['End_Time'], errors='coerce')
+
+        # Time features
+        if 'Start_Time' in df.columns:
+            df['Year'] = df['Start_Time'].dt.year
+            df['Month'] = df['Start_Time'].dt.month
+            df['hour'] = df['Start_Time'].dt.hour
+
+        # Group by state (avoid crashing if columns missing)
+        if {'State', 'Severity'}.issubset(df.columns):
+            avg_severity_by_state = df.groupby('State')['Severity'].mean().sort_values(ascending=False)
+            print("Average severity by state:\n", avg_severity_by_state.head(10))
+
+        if {'State', 'ID'}.issubset(df.columns):
+            accidents_by_state = df.groupby('State')['ID'].count().sort_values(ascending=False)
+            print("Accidents by state (top 10):\n", accidents_by_state.head(10))
+
+        if 'City' in df.columns:
+            top_cities = df['City'].value_counts().head(10)
+            print("Top 10 cities by accident count:\n", top_cities)
+
+        if {'State', 'Month', 'ID'}.issubset(df.columns):
+            monthly_trend_CA = df[df['State'] == 'CA'].groupby('Month')['ID'].count()
+            print("Monthly trend for CA:\n", monthly_trend_CA)
+
+        # Persist cleaned df for downstream use
+        self.df = df
+
+
+class Load(Transform):
+    """
+    Provides saving capabilities for cleaned dataframe.
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # Make an explicit attribute for the final dataframe to save
+        self.df_tocsv = self.df.copy()
+
+    def save_to_csv(self, out_path: str = 'cleaned_us_accidents.csv'):
+        self.df_tocsv.to_csv(out_path, index=False)
+        print(f"Cleaned data saved to '{out_path}'")
+
+
+class Visualize(Load):
+    """
+    Visualization routines.
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def plot_histogram(self):
+        if 'Severity' not in self.df_tocsv.columns:
+            print("Column 'Severity' not found; skipping histogram.")
+            return
+        plt.figure(figsize=(8, 5))
+        self.df_tocsv['Severity'].dropna().astype(float).hist(bins=50, color='skyblue', edgecolor='black')
+        plt.title("Distribution of Severity")
+        plt.xlabel("Severity")
+        plt.ylabel("Frequency")
+        plt.grid(axis='y', alpha=0.4)
+        plt.tight_layout()
+        plt.show()
+
+    def plot_scatter(self, max_points: int = 150_000, alpha: float = 0.2):
+        required = {'Start_Lat', 'Start_Lng'}
+        if not required.issubset(self.df_tocsv.columns):
+            print(f"Columns {required} not found; skipping scatter plot.")
+            return
+
+        df = self.df_tocsv[['Start_Lat', 'Start_Lng']].dropna()
+
+        # Subsample to keep plotting responsive on large datasets
+        if len(df) > max_points:
+            df = df.sample(n=max_points, random_state=42)
+
+        plt.figure(figsize=(8, 5))
+        plt.scatter(df['Start_Lat'], df['Start_Lng'], s=2, alpha=alpha)
+        plt.title("Accident Locations (sampled)")
+        plt.xlabel("Start Latitude")
+        plt.ylabel("Start Longitude")
+        plt.tight_layout()
+        plt.show()
+
+    def plot_top10_states(self):
+        required = {'State', 'ID'}
+        if not required.issubset(self.df_tocsv.columns):
+            print(f"Columns {required} not found; skipping top states bar chart.")
+            return
+
+        accident_by_state = self.df_tocsv.groupby('State')['ID'].count().sort_values(ascending=False)
+        accident_by_state.head(10).plot(kind='bar', figsize=(10, 6), color='orange')
+        plt.title("Top 10 states with most accidents")
+        plt.ylabel("Number of accidents")
+        plt.xlabel("State")
+        plt.xticks(rotation=45, ha='right')
+        plt.tight_layout()
+        plt.show()
+
+    def plot_severity_heatmap(self):
+        required = {'State', 'Severity', 'ID'}
+        if not required.issubset(self.df_tocsv.columns):
+            print(f"Columns {required} not found; skipping severity heatmap.")
+            return
+
+        pivot = self.df_tocsv.pivot_table(
+            index="State", columns='Severity', values='ID', aggfunc='count'
+        ).fillna(0)
+
+        plt.figure(figsize=(12, 8))
+        sns.heatmap(pivot, cmap='Reds')
+        plt.title("Severity distribution by state")
+        plt.xlabel("Severity")
+        plt.ylabel("State")
+        plt.tight_layout()
+        plt.show()
+
+    def plot_monthly_trend_CA(self):
+        required = {'State', 'Month', 'ID'}
+        if not required.issubset(self.df_tocsv.columns):
+            print(f"Columns {required} not found; skipping monthly trend for CA.")
+            return
+
+        monthly_trend = self.df_tocsv[self.df_tocsv['State'] == 'CA'].groupby('Month')['ID'].count()
+        if monthly_trend.empty:
+            print("No CA data found; skipping monthly trend plot.")
+            return
+
+        plt.figure(figsize=(10, 6))
+        monthly_trend.sort_index().plot(kind='line', marker='o', color='green')
+        plt.title("Monthly trend of accidents in CA")
+        plt.ylabel("Number of accidents")
+        plt.xlabel("Month")
+        plt.grid(True, alpha=0.3)
+        plt.xticks(range(1, 13))
+        plt.tight_layout()
+        plt.show()
+
+
+if __name__ == "__main__":
+    viz = Visualize(
+        dataset="sobhanmoosavi/us-accidents",
+        extract_dir=r"D:\OneDrive - Coforge Limited\Desktop\harshfinalproject\us_accidents",
+        delete_zip_after_unzip=True,
+        encoding="utf-8",
+        verbose=True,
+    )
+
+    viz.print_total_rows()
+    viz.drop_duplicates()
+    viz.clean_and_groupby()
+    viz.save_to_csv('cleaned_us_accidents.csv')
+
+    viz.plot_histogram()
+    viz.plot_scatter(max_points=150_000)
+    viz.plot_top10_states()
+    viz.plot_severity_heatmap()
+    viz.plot_monthly_trend_CA()
